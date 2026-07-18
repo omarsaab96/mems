@@ -1,0 +1,115 @@
+import { randomBytes } from "crypto";
+import { mkdir, readFile, rm, stat, writeFile } from "fs/promises";
+import path from "path";
+
+const mediaStorageRoot = process.env.MEDIA_STORAGE_DIR
+  ? path.resolve(process.env.MEDIA_STORAGE_DIR)
+  : path.join(process.cwd(), "storage", "media");
+
+const extensionByMime: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "video/mp4": ".mp4",
+  "video/quicktime": ".mov",
+  "video/webm": ".webm",
+};
+
+const mimeByExtension: Record<string, string> = {
+  ".gif": "image/gif",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".png": "image/png",
+  ".webm": "video/webm",
+  ".webp": "image/webp",
+};
+
+function safeSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
+function safeStorageKeySegment(value: string) {
+  const segment = value.replace(/[^a-zA-Z0-9_.-]/g, "");
+  if (!segment || segment === "." || segment === "..") return "";
+  return segment;
+}
+
+function extensionFor(file: File) {
+  const fromName = path.extname(file.name).toLowerCase().replace(/[^a-z0-9.]/g, "");
+  return extensionByMime[file.type] ?? (fromName || ".bin");
+}
+
+function resolveStoragePath(storageKey: string, options: { legacyDotless?: boolean } = {}) {
+  const normalizedKey = storageKey
+    .split("/")
+    .map((segment) => options.legacyDotless ? safeSegment(segment) : safeStorageKeySegment(segment))
+    .filter(Boolean)
+    .join(path.sep);
+  const resolvedPath = path.resolve(mediaStorageRoot, normalizedKey);
+
+  if (!resolvedPath.startsWith(mediaStorageRoot + path.sep)) {
+    throw new Error("Invalid media storage key");
+  }
+
+  return resolvedPath;
+}
+
+async function readExistingFile(storageKey: string) {
+  const filePath = resolveStoragePath(storageKey);
+
+  try {
+    const [buffer, fileStat] = await Promise.all([readFile(filePath), stat(filePath)]);
+    return { buffer, filePath, fileStat };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+
+    const legacyFilePath = resolveStoragePath(storageKey, { legacyDotless: true });
+    const [buffer, fileStat] = await Promise.all([readFile(legacyFilePath), stat(legacyFilePath)]);
+    return { buffer, filePath: legacyFilePath, fileStat };
+  }
+}
+
+export async function saveUploadedMediaFile(file: File, coupleId: string) {
+  const coupleSegment = safeSegment(coupleId);
+  const fileName = `${Date.now()}-${randomBytes(10).toString("hex")}${extensionFor(file)}`;
+  const storageKey = `${coupleSegment}/${fileName}`;
+  const filePath = resolveStoragePath(storageKey);
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, buffer);
+
+  return {
+    storageKey,
+    url: `/api/media/files/${storageKey}`,
+  };
+}
+
+export async function readStoredMediaFile(storageKey: string) {
+  const { buffer, filePath, fileStat } = await readExistingFile(storageKey);
+  const contentType = mimeByExtension[path.extname(storageKey).toLowerCase()] ??
+    mimeByExtension[path.extname(filePath).toLowerCase()] ??
+    "application/octet-stream";
+
+  return {
+    buffer,
+    contentLength: fileStat.size,
+    contentType,
+  };
+}
+
+export async function deleteStoredMediaFile(storageKey: unknown) {
+  if (typeof storageKey !== "string" || !storageKey.trim()) return;
+
+  try {
+    await Promise.all([
+      rm(resolveStoragePath(storageKey), { force: true }),
+      rm(resolveStoragePath(storageKey, { legacyDotless: true }), { force: true }),
+    ]);
+  } catch {
+    // A missing file should not block deletion of the database record.
+  }
+}

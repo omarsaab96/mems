@@ -40,6 +40,7 @@ const mediaSchema = new Schema(
     type: { type: String, enum: ["photo", "video"], required: true },
     title: String,
     url: { type: String, required: true },
+    storageKey: String,
     thumbnailUrl: String,
     capturedAt: Date,
     location: String,

@@ -1,6 +1,7 @@
 import { connectDb } from "@/lib/db";
 import { requireAuthContext, unauthorizedResponse } from "@/lib/auth";
 import { serializeAlbum } from "@/lib/api-serializers";
+import { deleteStoredMediaFile } from "@/lib/media-storage";
 import { AlbumModel, CoupleModel, MediaModel, VoteSessionModel } from "@/lib/models";
 
 export const runtime = "nodejs";
@@ -72,6 +73,9 @@ export async function POST(request: Request) {
     const deletedMediaIds = decisions
       .filter((item) => item.decision === "delete")
       .map((item) => item.mediaId);
+    const deletedMediaRecords = deletedMediaIds.length
+      ? await MediaModel.find({ _id: { $in: deletedMediaIds }, coupleId }).select("storageKey").lean()
+      : [];
     const comments = Array.isArray(folder.comments) ? folder.comments : [];
     const albumComments = comments
       .filter((comment: Record<string, unknown>) => keeperIds.has(String(comment.mediaId ?? "")))
@@ -99,6 +103,11 @@ export async function POST(request: Request) {
         ? MediaModel.deleteMany({ _id: { $in: deletedMediaIds }, coupleId })
         : Promise.resolve(),
     ]);
+    await Promise.all(
+      deletedMediaRecords.map((media) =>
+        deleteStoredMediaFile((media as Record<string, unknown>).storageKey),
+      ),
+    );
 
     return Response.json({
       album: serializeAlbum(album.toObject()),

@@ -2,6 +2,7 @@ import { connectDb } from "@/lib/db";
 import type { Types } from "mongoose";
 import { serializeMedia } from "@/lib/api-serializers";
 import { requireAuthContext, unauthorizedResponse } from "@/lib/auth";
+import { deleteStoredMediaFile, saveUploadedMediaFile } from "@/lib/media-storage";
 import { MediaModel } from "@/lib/models";
 
 export const runtime = "nodejs";
@@ -48,12 +49,9 @@ function inferUploadMetadata(fileName: string) {
   };
 }
 
-async function fileToDataUrl(file: File) {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  return `data:${file.type || "application/octet-stream"};base64,${buffer.toString("base64")}`;
-}
-
 export async function POST(request: Request) {
+  const uploadedStorageKeys: string[] = [];
+
   try {
     await connectDb();
     const { userId, coupleId } = await requireAuthContext();
@@ -64,13 +62,16 @@ export async function POST(request: Request) {
       files.map(async (file) => {
         const metadata = inferUploadMetadata(file.name);
         const modifiedAt = file.lastModified ? toIsoDate(file.lastModified) : "";
+        const storedFile = await saveUploadedMediaFile(file, String(coupleId));
+        uploadedStorageKeys.push(storedFile.storageKey);
 
         return {
           coupleId,
           uploadedByUserId: userId,
           type: file.type.startsWith("video") ? "video" : "photo",
           title: metadata.title,
-          url: await fileToDataUrl(file),
+          url: storedFile.url,
+          storageKey: storedFile.storageKey,
           capturedAt: metadata.capturedAt || modifiedAt || new Date().toISOString(),
           location: metadata.location,
           status: "in_review",
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
       media: mediaRecords.map((item) => serializeMedia((item.toObject?.() ?? item) as SerializableRecord)),
     });
   } catch (error) {
+    await Promise.all(uploadedStorageKeys.map(deleteStoredMediaFile));
     if (error instanceof Error && error.message === "Unauthorized") return unauthorizedResponse();
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to upload media" },
