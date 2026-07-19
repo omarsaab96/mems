@@ -755,7 +755,7 @@ export function MediaVoting({
           "group relative aspect-square cursor-grab overflow-hidden rounded-md bg-[#f4f1ec] ring-offset-2 ring-offset-white active:cursor-grabbing",
           sourceId === "tray"
             ? "min-h-[136px] flex-[0_0_calc((100%-0.5rem)/2)] max-[1300px]:min-h-[116px]"
-            : "min-h-[160px] max-[1300px]:min-h-[132px]",
+            : "min-h-[180px] max-[1300px]:min-h-[132px]",
           isSelected && "ring-2 ring-[#1f7a7a]",
           isMediaDragging && isSelected && "opacity-55",
         )}
