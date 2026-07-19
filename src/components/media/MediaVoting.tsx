@@ -768,9 +768,9 @@ export function MediaVoting({
         >
           <MediaPreview item={item} fit="cover" />
           {item.type === "video" && (
-            <div className="absolute left-50 top-50 -translate-50 flex h-8 items-center gap-2 justify-center rounded-full bg-black/55 text-white text-xs">
-              <Play size={16} fill="currentColor" aria-hidden="true" />
-              Double click to play
+            <div className="absolute left-[50%] top-[50%] -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 justify-center p-2 rounded-full bg-black/55 text-white">
+              <Play size={10} fill="currentColor" aria-hidden="true" />
+              <span className="text-[10px] whitespace-nowrap">Double click to play</span>
             </div>
           )}
           {isSelected && (
