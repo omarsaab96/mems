@@ -187,11 +187,11 @@ export function MediaVoting({
   const visibleTrayMedia = visibleMediaItems(unsortedMedia, "tray");
   const overallUploadProgress = uploadTasks.length
     ? Math.round(
-        uploadTasks.reduce(
-          (total, task) => total + (task.status === "error" ? 100 : task.progress),
-          0,
-        ) / uploadTasks.length,
-      )
+      uploadTasks.reduce(
+        (total, task) => total + (task.status === "error" ? 100 : task.progress),
+        0,
+      ) / uploadTasks.length,
+    )
     : 0;
 
   useEffect(() => {
@@ -766,7 +766,7 @@ export function MediaVoting({
           onDoubleClick={() => openMediaPreview(item.id, sourceId)}
           className="absolute inset-0 text-left"
         >
-          <MediaPreview item={item} fit = "cover"/>
+          <MediaPreview item={item} fit="cover" />
           {item.type === "video" && (
             <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white">
               <Play size={16} fill="currentColor" aria-hidden="true" />
@@ -791,7 +791,7 @@ export function MediaVoting({
           >
             {albumValidationStamp === "keep" && <Check size={28} strokeWidth={1} aria-hidden="true" />}
             {albumValidationStamp === "delete" && <X size={28} strokeWidth={1} aria-hidden="true" />}
-            {albumValidationStamp === "conflict" && <AlertTriangle size={28} strokeWidth={1} aria-hidden="true" /> }
+            {albumValidationStamp === "conflict" && <AlertTriangle size={28} strokeWidth={1} aria-hidden="true" />}
           </div>
         )}
 
@@ -879,7 +879,7 @@ export function MediaVoting({
         className={cn(
           "grid min-w-0 gap-5",
           (unsortedMedia.length > 0 || uploadTasks.length > 0) &&
-            "lg:grid-cols-[minmax(0,1fr)_360px] max-[1300px]:lg:grid-cols-[minmax(0,1fr)_320px]",
+          "lg:grid-cols-[minmax(0,1fr)_360px] max-[1300px]:lg:grid-cols-[minmax(0,1fr)_320px]",
           isMediaDragging && "select-none",
         )}
       >
@@ -924,183 +924,186 @@ export function MediaVoting({
           </div>
         </div>*/}
 
-        {!voteSessions.length && (
-          <div className="flex min-h-[420px] items-center justify-center rounded-md border border-dashed border-[#d8d0c6] bg-white p-8 text-center">
-            <div>
-              <ImagePlus className="mx-auto text-[#ef6f5e]" size={34} aria-hidden="true" />
-              <h3 className="mt-4 text-xl font-semibold">
-                {unsortedMedia.length
-                  ? "Create a folder to sort uploaded media"
-                  : "Upload media to start voting"}
-              </h3>
-              <p className="mt-2 max-w-md text-xs leading-6 text-[#6b7177]">
-                {unsortedMedia.length
-                  ? "Your uploaded media is waiting in the tray. Create folders, then drag media into each to sort them."
-                  : "Upload, sort, group, order your media and vote on what to keep or delete."}
-              </p>
+          {!voteSessions.length && (
+            <div className="flex min-h-[420px] items-center justify-center rounded-md border border-dashed border-[#d8d0c6] bg-white p-8 text-center">
+              <div>
+                <ImagePlus className="mx-auto text-[#ef6f5e]" size={34} aria-hidden="true" />
+                <h3 className="mt-4 text-xl font-semibold">
+                  {unsortedMedia.length
+                    ? "Create a folder to sort uploaded media"
+                    : "Upload media to start voting"}
+                </h3>
+                <p className="mt-2 max-w-md text-xs leading-6 text-[#6b7177]">
+                  {unsortedMedia.length
+                    ? "Your uploaded media is waiting in the tray. Create folders, then drag media into each to sort them."
+                    : "Upload, sort, group, order your media and vote on what to keep or delete."}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {voteSessions.map((session) => {
-          const items = sessionMedia(session);
-          const visibleItems = visibleMediaItems(items, session.id);
-          const isActive = activeSessionId === session.id;
-          const isValidatingAlbum = Boolean(validatingAlbumSessionIds[session.id]);
-          const albumValidationMessage = albumValidationMessages[session.id];
-          const albumConfirmationTimer = albumConfirmationTimers[session.id];
+          {voteSessions.map((session) => {
+            const items = sessionMedia(session);
+            const visibleItems = visibleMediaItems(items, session.id);
+            const isActive = activeSessionId === session.id;
+            const isValidatingAlbum = Boolean(validatingAlbumSessionIds[session.id]);
+            const albumValidationMessage = albumValidationMessages[session.id];
+            const albumConfirmationTimer = albumConfirmationTimers[session.id];
 
-          return (
-            <section
-              key={session.id}
-              ref={(node) => {
-                if (node) {
-                  dropTargetRefs.current.set(session.id, node);
-                } else {
-                  dropTargetRefs.current.delete(session.id);
-                }
-              }}
-              onClick={() => setActiveSessionId(session.id)}
-              onDragEnter={(event) => handleDragEnter(event, session.id)}
-              onDragOver={(event) => handleDragOver(event, session.id)}
-              onDragLeave={(event) => handleDragLeave(event, session.id)}
-              onDrop={(event) => dropIntoSession(event, session.id)}
-              className={cn(
-                "relative rounded-md border bg-white p-5 shadow-sm transition max-[1300px]:p-4",
-                // isActive ? "border-[#ef6f5e]" : "border-[#e6e0d8]",
-                isActive ? "border-[#e6e0d8]" : "border-[#e6e0d8]",
-              )}
-            >
-              <header className="flex flex-col gap-4 md:flex-row md:items-top md:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {renamingSessionId === session.id ? (
-                      <input
-                        value={renameDraft}
-                        onChange={(event) => setRenameDraft(event.target.value)}
-                        onBlur={finishRename}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            finishRename();
-                          }
-                          if (event.key === "Escape") {
-                            event.preventDefault();
-                            cancelRename();
-                          }
+            return (
+              <section
+                key={session.id}
+                ref={(node) => {
+                  if (node) {
+                    dropTargetRefs.current.set(session.id, node);
+                  } else {
+                    dropTargetRefs.current.delete(session.id);
+                  }
+                }}
+                onClick={() => setActiveSessionId(session.id)}
+                onDragEnter={(event) => handleDragEnter(event, session.id)}
+                onDragOver={(event) => handleDragOver(event, session.id)}
+                onDragLeave={(event) => handleDragLeave(event, session.id)}
+                onDrop={(event) => dropIntoSession(event, session.id)}
+                className={cn(
+                  "relative rounded-md border bg-white p-5 shadow-sm transition max-[1300px]:p-4",
+                  // isActive ? "border-[#ef6f5e]" : "border-[#e6e0d8]",
+                  isActive ? "border-[#e6e0d8]" : "border-[#e6e0d8]",
+                )}
+              >
+                <header className="flex flex-col gap-4 md:flex-row md:items-top md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {renamingSessionId === session.id ? (
+                        <input
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          onBlur={finishRename}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              finishRename();
+                            }
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              cancelRename();
+                            }
+                          }}
+                          autoFocus
+                          className="min-w-0 rounded-md border border-[#1f7a7a] bg-white px-2 py-1 text-xl font-semibold tracking-normal outline-none max-[1300px]:text-lg"
+                          aria-label="Folder name"
+                        />
+                      ) : (
+                        <h3 className="text-xl font-semibold tracking-normal max-[1300px]:text-lg">{session.title}</h3>
+                      )}
+                      <button
+                        type="button"
+                        title="Rename folder"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startRename(session);
                         }}
-                        autoFocus
-                        className="min-w-0 rounded-md border border-[#1f7a7a] bg-white px-2 py-1 text-xl font-semibold tracking-normal outline-none max-[1300px]:text-lg"
-                        aria-label="Folder name"
-                      />
-                    ) : (
-                      <h3 className="text-xl font-semibold tracking-normal max-[1300px]:text-lg">{session.title}</h3>
-                    )}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-[#5f666d] transition hover:bg-[#f4f1ec] hover:text-[#202124]"
+                      >
+                        <Pencil size={15} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <p className="mt-1 text-sm text-[#6b7177]">
+                      {items.length} media · Drop selected media here
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      title="Rename folder"
                       onClick={(event) => {
                         event.stopPropagation();
-                        startRename(session);
+                        handleAlbumButtonClick(session, items);
                       }}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-[#5f666d] transition hover:bg-[#f4f1ec] hover:text-[#202124]"
+                      disabled={isValidatingAlbum}
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60",
+                        albumConfirmationTimer
+                          ? "animate-pulse bg-[#1f7a7a] shadow-lg shadow-[#1f7a7a]/25"
+                          : "bg-[#ef6f5e]",
+                      )}
                     >
-                      <Pencil size={15} aria-hidden="true" />
+                      <Album size={16} aria-hidden="true" />
+                      {isValidatingAlbum
+                        ? "Validating..."
+                        : albumConfirmationTimer
+                          ? `Confirm ${albumConfirmationTimer}`
+                          : "Create album"}
                     </button>
-                  </div>
-                  <p className="mt-1 text-sm text-[#6b7177]">
-                    {items.length} media · Drop selected media here
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleAlbumButtonClick(session, items);
-                    }}
-                    disabled={isValidatingAlbum}
-                    className={cn(
-                      "inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60",
-                      albumConfirmationTimer
-                        ? "animate-pulse bg-[#1f7a7a] shadow-lg shadow-[#1f7a7a]/25"
-                        : "bg-[#ef6f5e]",
-                    )}
-                  >
-                    <Album size={16} aria-hidden="true" />
-                    {isValidatingAlbum
-                      ? "Validating..."
-                      : albumConfirmationTimer
-                        ? `Confirm ${albumConfirmationTimer}`
-                        : "Create album"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeVoteSession(session.id);
-                    }}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#d8d0c6] px-3 text-sm font-semibold text-[#9a3f34]"
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                    Remove folder
-                  </button>
-                </div>
-              </header>
-
-              {albumValidationMessage && (
-                <p className="absolute right-5 top-20 z-30 max-w-sm rounded-md border border-[#ead19b] bg-[#fff8e6] p-3 text-sm font-semibold text-[#8a650e] shadow-lg">
-                  {albumValidationMessage}
-                </p>
-              )}
-
-              {items.length ? (
-                <div
-                  ref={(node) => {
-                    if (node) {
-                      selectionContainerRefs.current.set(session.id, node);
-                    } else {
-                      selectionContainerRefs.current.delete(session.id);
-                    }
-                  }}
-                  className="relative mt-5 flex flex-wrap gap-2 max-[1300px]:mt-4 max-[1300px]:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
-                  onPointerDown={(event) => beginSelectionBox(event, session.id, items)}
-                  onPointerMove={moveSelectionBox}
-                  onPointerUp={endSelectionBox}
-                  onPointerCancel={endSelectionBox}
-                >
-                  {visibleItems.map((item) =>
-                    renderMediaCard(item, session.id, items, items.findIndex((media) => media.id === item.id)),
-                  )}
-                  {selectionBox?.sourceId === session.id && (
-                    <div
-                      className="pointer-events-none absolute z-30 border border-[#1f7a7a] bg-[#1f7a7a]/14"
-                      style={{
-                        left: selectionBox.left,
-                        top: selectionBox.top,
-                        width: selectionBox.width,
-                        height: selectionBox.height,
-                      }}
-                    />
-                  )}
-                  {visibleItems.length < items.length && (
                     <button
                       type="button"
-                      onClick={() => showMoreMedia(session.id)}
-                      className="col-span-full mt-2 inline-flex h-10 items-center justify-center rounded-md border border-[#d8d0c6] bg-white px-4 text-sm font-semibold text-[#202124] transition hover:bg-[#f4f1ec]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeVoteSession(session.id);
+                      }}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#d8d0c6] px-3 text-sm font-semibold text-[#9a3f34]"
                     >
-                      Show {Math.min(largeMediaRenderLimit, items.length - visibleItems.length)} more
+                      <Trash2 size={16} aria-hidden="true" />
+                      Remove folder
                     </button>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-5 rounded-md border border-dashed border-[#d8d0c6] bg-[#fbfaf8] p-6 text-center text-sm font-medium text-[#6b7177]">
-                  Drop media here to build this folder.
-                </div>
-              )}
-            </section>
-          );
-        })}
+                  </div>
+                </header>
+
+                {albumValidationMessage && (
+                  <p className="absolute right-5 top-20 z-30 max-w-sm rounded-md border border-[#ead19b] bg-[#fff8e6] p-3 text-sm font-semibold text-[#8a650e] shadow-lg">
+                    {albumValidationMessage}
+                  </p>
+                )}
+
+                {items.length ? (
+                  <div>
+                    <div
+                      ref={(node) => {
+                        if (node) {
+                          selectionContainerRefs.current.set(session.id, node);
+                        } else {
+                          selectionContainerRefs.current.delete(session.id);
+                        }
+                      }}
+                      className="relative mt-5 flex flex-wrap gap-2 max-[1300px]:mt-4 max-[1300px]:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
+                      onPointerDown={(event) => beginSelectionBox(event, session.id, items)}
+                      onPointerMove={moveSelectionBox}
+                      onPointerUp={endSelectionBox}
+                      onPointerCancel={endSelectionBox}
+                    >
+                      {visibleItems.map((item) =>
+                        renderMediaCard(item, session.id, items, items.findIndex((media) => media.id === item.id)),
+                      )}
+                      {selectionBox?.sourceId === session.id && (
+                        <div
+                          className="pointer-events-none absolute z-30 border border-[#1f7a7a] bg-[#1f7a7a]/14"
+                          style={{
+                            left: selectionBox.left,
+                            top: selectionBox.top,
+                            width: selectionBox.width,
+                            height: selectionBox.height,
+                          }}
+                        />
+                      )}
+
+                    </div>
+                    {visibleItems.length < items.length && (
+                      <button
+                        type="button"
+                        onClick={() => showMoreMedia(session.id)}
+                        className="col-span-full mt-2 inline-flex h-10 items-center justify-center rounded-md border border-[#d8d0c6] bg-white px-4 text-sm font-semibold text-[#202124] transition hover:bg-[#f4f1ec]"
+                      >
+                        Show {Math.min(largeMediaRenderLimit, items.length - visibleItems.length)} more
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-md border border-dashed border-[#d8d0c6] bg-[#fbfaf8] p-6 text-center text-sm font-medium text-[#6b7177]">
+                    Drop media here to build this folder.
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </section>
 
         {(unsortedMedia.length > 0 || uploadTasks.length > 0) && (
@@ -1121,64 +1124,64 @@ export function MediaVoting({
               "border-[#d8d0c6]",
             )}
           >
-          <div className="flex items-center justify-between border-b border-[#e6e0d8] bg-[#fbfaf8] p-3">
-            <div>
-              <p className="text-sm font-semibold">Media tray</p>
-              <p className="text-xs text-[#6b7177]">{unsortedMedia.length} unsorted media</p>
-            </div>
-            {uploadTasks.length > 0 && (
-              <div className="upload-shimmer flex items-center gap-2">
-                <span className="flex items-center justify-center rounded-full text-[#1f7a7a]">
-                  <UploadCloud size={20} aria-hidden="true" />
-                </span>
-                <div className="text-right">
-                  <p className="text-xs font-semibold text-[#1f7a7a]">{overallUploadProgress}%</p>
-                  {/* <p className="text-[11px] font-medium text-[#6b7177]">Uploading</p> */}
-                </div>
+            <div className="flex items-center justify-between border-b border-[#e6e0d8] bg-[#fbfaf8] p-3">
+              <div>
+                <p className="text-sm font-semibold">Media tray</p>
+                <p className="text-xs text-[#6b7177]">{unsortedMedia.length} unsorted media</p>
               </div>
-            )}
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            <div
-              ref={(node) => {
-                if (node) {
-                  selectionContainerRefs.current.set("tray", node);
-                } else {
-                  selectionContainerRefs.current.delete("tray");
-                }
-              }}
-              className="relative flex min-h-full flex-wrap content-start gap-2"
-              onPointerDown={(event) => beginSelectionBox(event, "tray", unsortedMedia)}
-              onPointerMove={moveSelectionBox}
-              onPointerUp={endSelectionBox}
-              onPointerCancel={endSelectionBox}
-            >
-              {uploadTasks.map((task) => renderUploadTaskTile(task))}
-              {visibleTrayMedia.map((item) =>
-                renderMediaCard(item, "tray", unsortedMedia, unsortedMedia.findIndex((media) => media.id === item.id)),
-              )}
-              {selectionBox?.sourceId === "tray" && (
-                <div
-                  className="pointer-events-none absolute z-30 border border-[#1f7a7a] bg-[#1f7a7a]/14"
-                  style={{
-                    left: selectionBox.left,
-                    top: selectionBox.top,
-                    width: selectionBox.width,
-                    height: selectionBox.height,
-                  }}
-                />
-              )}
-              {visibleTrayMedia.length < unsortedMedia.length && (
-                <button
-                  type="button"
-                  onClick={() => showMoreMedia("tray")}
-                  className="mt-2 inline-flex h-10 flex-[0_0_100%] items-center justify-center rounded-md border border-[#d8d0c6] bg-white px-4 text-sm font-semibold text-[#202124] transition hover:bg-[#f4f1ec]"
-                >
-                  Show {Math.min(largeMediaRenderLimit, unsortedMedia.length - visibleTrayMedia.length)} more
-                </button>
+              {uploadTasks.length > 0 && (
+                <div className="upload-shimmer flex items-center gap-2">
+                  <span className="flex items-center justify-center rounded-full text-[#1f7a7a]">
+                    <UploadCloud size={20} aria-hidden="true" />
+                  </span>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-[#1f7a7a]">{overallUploadProgress}%</p>
+                    {/* <p className="text-[11px] font-medium text-[#6b7177]">Uploading</p> */}
+                  </div>
+                </div>
               )}
             </div>
-          </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div
+                ref={(node) => {
+                  if (node) {
+                    selectionContainerRefs.current.set("tray", node);
+                  } else {
+                    selectionContainerRefs.current.delete("tray");
+                  }
+                }}
+                className="relative flex min-h-full flex-wrap content-start gap-2"
+                onPointerDown={(event) => beginSelectionBox(event, "tray", unsortedMedia)}
+                onPointerMove={moveSelectionBox}
+                onPointerUp={endSelectionBox}
+                onPointerCancel={endSelectionBox}
+              >
+                {uploadTasks.map((task) => renderUploadTaskTile(task))}
+                {visibleTrayMedia.map((item) =>
+                  renderMediaCard(item, "tray", unsortedMedia, unsortedMedia.findIndex((media) => media.id === item.id)),
+                )}
+                {selectionBox?.sourceId === "tray" && (
+                  <div
+                    className="pointer-events-none absolute z-30 border border-[#1f7a7a] bg-[#1f7a7a]/14"
+                    style={{
+                      left: selectionBox.left,
+                      top: selectionBox.top,
+                      width: selectionBox.width,
+                      height: selectionBox.height,
+                    }}
+                  />
+                )}
+                {visibleTrayMedia.length < unsortedMedia.length && (
+                  <button
+                    type="button"
+                    onClick={() => showMoreMedia("tray")}
+                    className="mt-2 inline-flex h-10 flex-[0_0_100%] items-center justify-center rounded-md border border-[#d8d0c6] bg-white px-4 text-sm font-semibold text-[#202124] transition hover:bg-[#f4f1ec]"
+                  >
+                    Show {Math.min(largeMediaRenderLimit, unsortedMedia.length - visibleTrayMedia.length)} more
+                  </button>
+                )}
+              </div>
+            </div>
           </aside>
         )}
       </div>
