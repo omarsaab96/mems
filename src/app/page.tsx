@@ -1,7 +1,7 @@
 "use client";
 
 import { Album as AlbumIcon, Clock3, Heart, Vote, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Albums } from "@/components/albums/Albums";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -100,6 +100,7 @@ export default function Home() {
   const [isMediaUploadDragActive, setIsMediaUploadDragActive] = useState(false);
   const handleUploadRef = useRef<(files: FileList | File[] | null) => Promise<void>>(async () => {});
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
+  const [pendingApiCount, setPendingApiCount] = useState(0);
   const [workspaceError, setWorkspaceError] = useState("");
 
   const activeVoteSession =
@@ -119,6 +120,7 @@ export default function Home() {
   const comments = voteSessions.flatMap((session) => session.comments);
   const currentUser = users.find((user) => user.id === currentUserId) ?? null;
   const hasPartner = couple.partnerIds.filter(Boolean).length >= 2;
+  const isApiPending = pendingApiCount > 0;
 
   const stats = useMemo(
     () => [
@@ -134,14 +136,25 @@ export default function Home() {
     [albums.length, memories.length, timeline.length, voteSessions],
   );
 
-  async function loadWorkspace() {
+  const withApiLoader = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
+    setPendingApiCount((count) => count + 1);
+    try {
+      return await operation();
+    } finally {
+      setPendingApiCount((count) => Math.max(0, count - 1));
+    }
+  }, []);
+
+  const loadWorkspace = useCallback(async () => {
     setIsLoadingWorkspace(true);
     setWorkspaceError("");
 
     try {
-      const workspace = await requestJson<WorkspaceData>("/api/workspace", {
-        cache: "no-store",
-      });
+      const workspace = await withApiLoader(() =>
+        requestJson<WorkspaceData>("/api/workspace", {
+          cache: "no-store",
+        }),
+      );
       setCurrentUserId(workspace.currentUserId);
       setCouple(workspace.couple ?? emptyCouple);
       setUsers(workspace.users);
@@ -165,12 +178,14 @@ export default function Home() {
     } finally {
       setIsLoadingWorkspace(false);
     }
-  }
+  }, [withApiLoader]);
 
   useEffect(() => {
     async function checkAuth() {
       try {
-        const result = await requestJson<AuthCheck>("/api/auth/me", { cache: "no-store" });
+        const result = await withApiLoader(() =>
+          requestJson<AuthCheck>("/api/auth/me", { cache: "no-store" }),
+        );
         setIsAuthenticated(result.authenticated);
       } catch {
         setIsAuthenticated(false);
@@ -180,7 +195,7 @@ export default function Home() {
     }
 
     void checkAuth();
-  }, []);
+  }, [withApiLoader]);
 
   useEffect(() => {
     if (!isAuthenticated || isCheckingAuth) return;
@@ -188,7 +203,7 @@ export default function Home() {
       void loadWorkspace();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [isAuthenticated, isCheckingAuth]);
+  }, [isAuthenticated, isCheckingAuth, loadWorkspace]);
 
   async function handleAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -201,13 +216,15 @@ export default function Home() {
 
     try {
       setWorkspaceError("");
-      await requestJson<{ ok: boolean }>(
-        authMode === "login" ? "/api/auth/login" : "/api/auth/register",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
+      await withApiLoader(() =>
+        requestJson<{ ok: boolean }>(
+          authMode === "login" ? "/api/auth/login" : "/api/auth/register",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        ),
       );
       setIsAuthenticated(true);
       setActiveSection("dashboard");
@@ -217,7 +234,7 @@ export default function Home() {
   }
 
   async function handleLogout() {
-    await requestJson<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+    await withApiLoader(() => requestJson<{ ok: boolean }>("/api/auth/logout", { method: "POST" }));
     setIsAuthenticated(false);
     setCurrentUserId("");
     setUsers([]);
@@ -250,14 +267,16 @@ export default function Home() {
 
     try {
       setProfileError("");
-      const result = await requestJson<{ user: User }>("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: profileNameDraft,
-          avatarUrl: profileAvatarDraft,
+      const result = await withApiLoader(() =>
+        requestJson<{ user: User }>("/api/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: profileNameDraft,
+            avatarUrl: profileAvatarDraft,
+          }),
         }),
-      });
+      );
       setUsers((items) => items.map((item) => (item.id === result.user.id ? result.user : item)));
       setIsProfileModalOpen(false);
     } catch (error) {
@@ -270,14 +289,16 @@ export default function Home() {
 
     try {
       setOnboardingError("");
-      const result = await requestJson<{
-        invite: { inviteeEmail: string; inviteUrl: string };
-        emailDelivery: { sent: boolean; reason?: string };
-      }>("/api/partner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: partnerEmail }),
-      });
+      const result = await withApiLoader(() =>
+        requestJson<{
+          invite: { inviteeEmail: string; inviteUrl: string };
+          emailDelivery: { sent: boolean; reason?: string };
+        }>("/api/partner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: partnerEmail }),
+        }),
+      );
       setPartnerInviteLink(result.invite.inviteUrl);
       setPartnerInvitedEmail(result.invite.inviteeEmail);
       setPartnerInviteEmailSent(result.emailDelivery.sent);
@@ -343,7 +364,7 @@ export default function Home() {
       ]);
       setActiveSection("media");
 
-      const result = await uploadFilesWithProgress(uploadItems);
+      const result = await withApiLoader(() => uploadFilesWithProgress(uploadItems));
 
       setUploadTasks((tasks) =>
         tasks.map((task) =>
@@ -443,11 +464,13 @@ export default function Home() {
   }, [activeSection]);
 
   async function vote(mediaId: string, value: VoteValue) {
-    const result = await requestJson<{ folders: VoteSession[] }>("/api/votes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaId, value }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{ folders: VoteSession[] }>("/api/votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId, value }),
+      }),
+    );
     setVoteSessions(result.folders);
   }
 
@@ -455,26 +478,30 @@ export default function Home() {
     const body = commentDrafts[mediaId]?.trim();
     if (!body) return;
 
-    const result = await requestJson<{ folders: VoteSession[] }>("/api/comments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaId, body }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{ folders: VoteSession[] }>("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId, body }),
+      }),
+    );
     setVoteSessions(result.folders);
     setCommentDrafts((drafts) => ({ ...drafts, [mediaId]: "" }));
   }
 
   async function buildAlbumFromVotes(sessionId = activeVoteSessionId) {
-    const result = await requestJson<{
-      album: Album;
-      folderId: string;
-      deletedMediaIds: string[];
-      albumedMediaIds: string[];
-    }>("/api/albums", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId: sessionId }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{
+        album: Album;
+        folderId: string;
+        deletedMediaIds: string[];
+        albumedMediaIds: string[];
+      }>("/api/albums", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: sessionId }),
+      }),
+    );
     const deletedMediaIds = new Set(result.deletedMediaIds);
     const albumedMediaIds = new Set(result.albumedMediaIds);
     const removedFolderId = result.folderId || sessionId;
@@ -496,9 +523,11 @@ export default function Home() {
   }
 
   async function deleteAlbum(albumId: string) {
-    const result = await requestJson<{ ok: boolean; deleted: boolean; album?: Album }>(
-      `/api/albums/${albumId}`,
-      { method: "DELETE" },
+    const result = await withApiLoader(() =>
+      requestJson<{ ok: boolean; deleted: boolean; album?: Album }>(
+        `/api/albums/${albumId}`,
+        { method: "DELETE" },
+      ),
     );
     if (result.deleted) {
       setAlbums((items) => items.filter((item) => item.id !== albumId));
@@ -510,55 +539,92 @@ export default function Home() {
   }
 
   async function cancelAlbumDeletion(albumId: string) {
-    const result = await requestJson<{ album: Album }>(`/api/albums/${albumId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancelDelete" }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{ album: Album }>(`/api/albums/${albumId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancelDelete" }),
+      }),
+    );
     setAlbums((items) => items.map((item) => (item.id === result.album.id ? result.album : item)));
   }
 
   async function addAlbumComment(albumId: string, mediaId: string, body: string) {
-    const result = await requestJson<{ album: Album }>(`/api/albums/${albumId}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaId, body }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{ album: Album }>(`/api/albums/${albumId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId, body }),
+      }),
+    );
     setAlbums((items) => items.map((item) => (item.id === result.album.id ? result.album : item)));
   }
 
   async function createVoteSession(title: string) {
-    const result = await requestJson<{ folder: VoteSession }>("/api/folders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{ folder: VoteSession }>("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      }),
+    );
 
     setVoteSessions((sessions) => [result.folder, ...sessions]);
     setActiveVoteSessionId(result.folder.id);
   }
 
   async function assignMediaToSessionBatch(mediaIds: string[], sessionId: string) {
-    const result = await requestJson<{ folders: VoteSession[] }>(`/api/folders/${sessionId}/media`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaIds }),
-    });
-    setVoteSessions(result.folders);
+    setVoteSessions((sessions) =>
+      sessions.map((session) => {
+        const remainingMediaIds = session.mediaIds.filter((mediaId) => !mediaIds.includes(mediaId));
+        if (session.id !== sessionId) return { ...session, mediaIds: remainingMediaIds };
+        return { ...session, mediaIds: [...mediaIds, ...remainingMediaIds] };
+      }),
+    );
     setActiveVoteSessionId(sessionId);
+
+    try {
+      const result = await withApiLoader(() =>
+        requestJson<{ folders: VoteSession[] }>(`/api/folders/${sessionId}/media`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mediaIds }),
+        }),
+      );
+      setVoteSessions(result.folders);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Failed to move media");
+      void loadWorkspace();
+    }
   }
 
   async function removeMediaFromVoteSessions(mediaIds: string[]) {
-    const result = await requestJson<{ folders: VoteSession[] }>("/api/folders/media", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaIds }),
-    });
-    setVoteSessions(result.folders);
+    setVoteSessions((sessions) =>
+      sessions.map((session) => ({
+        ...session,
+        mediaIds: session.mediaIds.filter((mediaId) => !mediaIds.includes(mediaId)),
+      })),
+    );
+
+    try {
+      const result = await withApiLoader(() =>
+        requestJson<{ folders: VoteSession[] }>("/api/folders/media", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mediaIds }),
+        }),
+      );
+      setVoteSessions(result.folders);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Failed to move media");
+      void loadWorkspace();
+    }
   }
 
   async function removeVoteSession(sessionId: string) {
-    await requestJson<{ ok: boolean }>(`/api/folders/${sessionId}`, { method: "DELETE" });
+    await withApiLoader(() =>
+      requestJson<{ ok: boolean }>(`/api/folders/${sessionId}`, { method: "DELETE" }),
+    );
     setVoteSessions((sessions) => {
       const nextSessions = sessions.filter((session) => session.id !== sessionId);
       if (activeVoteSessionId === sessionId) {
@@ -572,18 +638,22 @@ export default function Home() {
     const nextTitle = title.trim();
     if (!nextTitle) return;
 
-    const result = await requestJson<{ folder: VoteSession }>(`/api/folders/${sessionId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: nextTitle }),
-    });
+    const result = await withApiLoader(() =>
+      requestJson<{ folder: VoteSession }>(`/api/folders/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: nextTitle }),
+      }),
+    );
     setVoteSessions((sessions) =>
       sessions.map((session) => (session.id === sessionId ? result.folder : session)),
     );
   }
 
   async function removeUploadedMedia(mediaId: string) {
-    await requestJson<{ ok: boolean }>(`/api/media/${mediaId}`, { method: "DELETE" });
+    await withApiLoader(() =>
+      requestJson<{ ok: boolean }>(`/api/media/${mediaId}`, { method: "DELETE" }),
+    );
     setMediaItems((items) => items.filter((item) => item.id !== mediaId));
     setVoteSessions((sessions) =>
       sessions.map((session) => ({
@@ -663,6 +733,13 @@ export default function Home() {
       onOpenProfile={openProfileModal}
       onLogout={handleLogout}
     >
+      {isApiPending && (
+        <div className="fixed right-5 top-5 z-[70] inline-flex h-10 items-center gap-2 rounded-md border border-[#d8d0c6] bg-white/95 px-3 text-sm font-semibold text-[#202124] shadow-lg backdrop-blur">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#d8d0c6] border-t-[#1f7a7a]" />
+          Syncing
+        </div>
+      )}
+
       {workspaceError && (
         <div className="mb-5 rounded-md border border-[#f1c7be] bg-[#fff1ec] p-4 text-sm font-semibold text-[#9a3f34]">
           {workspaceError}

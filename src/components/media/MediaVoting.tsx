@@ -115,7 +115,7 @@ export function MediaVoting({
     sourceId: string;
     index: number;
   } | null>(null);
-  const [draggingMediaIds, setDraggingMediaIds] = useState<string[]>([]);
+  const [isMediaDragging, setIsMediaDragging] = useState(false);
   const [dragOverTargetId, setDragOverTargetId] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
@@ -165,6 +165,7 @@ export function MediaVoting({
   const selectedComments = selectedMedia ? (commentsByMediaId.get(selectedMedia.id) ?? []) : [];
   const selectionContainerRefs = useRef(new Map<string, HTMLDivElement>());
   const mediaItemRefs = useRef(new Map<string, HTMLElement>());
+  const draggingMediaIdsRef = useRef<string[]>([]);
   const dragOverTargetIdRef = useRef<string | null>(null);
   const albumValidationMessageTimeoutRefs = useRef<Record<string, number>>({});
   const albumConfirmationTimeoutRefs = useRef<Record<string, number>>({});
@@ -494,7 +495,8 @@ export function MediaVoting({
     }
 
     const ids = selectedMediaIds.has(item.id) ? Array.from(selectedMediaIds) : [item.id];
-    setDraggingMediaIds(ids);
+    draggingMediaIdsRef.current = ids;
+    setIsMediaDragging(true);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", ids.join(","));
 
@@ -513,14 +515,15 @@ export function MediaVoting({
   }
 
   function finishMediaDrag() {
+    draggingMediaIdsRef.current = [];
     dragOverTargetIdRef.current = null;
-    setDraggingMediaIds([]);
+    setIsMediaDragging(false);
     setDragOverTargetId(null);
   }
 
   function getDroppedMediaIds(event: DragEvent) {
-    const ids = draggingMediaIds.length
-      ? draggingMediaIds
+    const ids = draggingMediaIdsRef.current.length
+      ? draggingMediaIdsRef.current
       : event.dataTransfer.getData("text/plain").split(",").filter(Boolean);
     return Array.from(new Set(ids));
   }
@@ -702,6 +705,7 @@ export function MediaVoting({
       <article
         key={item.id}
         data-media-id={item.id}
+        data-media-card="true"
         draggable
         ref={(node) => {
           if (node) {
@@ -718,7 +722,7 @@ export function MediaVoting({
             ? "min-h-[136px] flex-[0_0_calc((100%-0.5rem)/2)] max-[1300px]:min-h-[116px]"
             : "min-h-[160px] max-[1300px]:min-h-[132px]",
           isSelected && "ring-2 ring-[#1f7a7a]",
-          draggingMediaIds.includes(item.id) && "opacity-45",
+          isMediaDragging && isSelected && "opacity-55",
         )}
       >
         <button
@@ -841,6 +845,7 @@ export function MediaVoting({
           "grid min-w-0 gap-5",
           (unsortedMedia.length > 0 || uploadTasks.length > 0) &&
             "lg:grid-cols-[minmax(0,1fr)_360px] max-[1300px]:lg:grid-cols-[minmax(0,1fr)_320px]",
+          isMediaDragging && "select-none [&_[data-media-card='true']]:pointer-events-none",
         )}
       >
         <section className="min-w-0 space-y-5">
