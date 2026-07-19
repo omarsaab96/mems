@@ -72,6 +72,12 @@ button {
   animation: albumValidationStamp 360ms ease-out both;
 }
 
+.media-drop-target-active {
+  border-color: #1f7a7a !important;
+  background: #eef8f5 !important;
+  box-shadow: 0 0 0 2px rgba(31, 122, 122, 0.25);
+}
+
 @keyframes loveFloat {
 
   0%,

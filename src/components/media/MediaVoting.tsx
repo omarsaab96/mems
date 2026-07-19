@@ -116,7 +116,6 @@ export function MediaVoting({
     index: number;
   } | null>(null);
   const [isMediaDragging, setIsMediaDragging] = useState(false);
-  const [dragOverTargetId, setDragOverTargetId] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -165,8 +164,12 @@ export function MediaVoting({
   const selectedComments = selectedMedia ? (commentsByMediaId.get(selectedMedia.id) ?? []) : [];
   const selectionContainerRefs = useRef(new Map<string, HTMLDivElement>());
   const mediaItemRefs = useRef(new Map<string, HTMLElement>());
+  const dropTargetRefs = useRef(new Map<string, HTMLElement>());
   const draggingMediaIdsRef = useRef<string[]>([]);
   const dragOverTargetIdRef = useRef<string | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragGhostCountRef = useRef<HTMLDivElement | null>(null);
+  const dragGhostLabelRef = useRef<HTMLDivElement | null>(null);
   const albumValidationMessageTimeoutRefs = useRef<Record<string, number>>({});
   const albumConfirmationTimeoutRefs = useRef<Record<string, number>>({});
   const selectionDragStartRef = useRef<{
@@ -190,6 +193,38 @@ export function MediaVoting({
         ) / uploadTasks.length,
       )
     : 0;
+
+  useEffect(() => {
+    const ghost = document.createElement("div");
+    ghost.className =
+      "fixed left-[-9999px] top-[-9999px] flex items-center gap-2 rounded-md border border-[#1f7a7a] bg-white px-3 py-2 text-sm font-semibold text-[#202124] shadow-2xl";
+
+    const count = document.createElement("div");
+    count.style.width = "34px";
+    count.style.height = "34px";
+    count.style.borderRadius = "6px";
+    count.style.overflow = "hidden";
+    count.style.background = "#f4f1ec";
+    count.style.display = "flex";
+    count.style.alignItems = "center";
+    count.style.justifyContent = "center";
+    count.style.color = "#1f7a7a";
+    count.style.fontWeight = "700";
+
+    const label = document.createElement("div");
+    ghost.append(count, label);
+    document.body.appendChild(ghost);
+    dragGhostRef.current = ghost;
+    dragGhostCountRef.current = count;
+    dragGhostLabelRef.current = label;
+
+    return () => {
+      ghost.remove();
+      dragGhostRef.current = null;
+      dragGhostCountRef.current = null;
+      dragGhostLabelRef.current = null;
+    };
+  }, []);
   const previewItems = useMemo(() => {
     if (previewContext.sourceId === "tray") return unsortedMedia;
 
@@ -499,26 +534,19 @@ export function MediaVoting({
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", ids.join(","));
 
-    const ghost = document.createElement("div");
-    ghost.className =
-      "fixed left-[-9999px] top-[-9999px] flex items-center gap-2 rounded-md border border-[#1f7a7a] bg-white px-3 py-2 text-sm font-semibold text-[#202124] shadow-2xl";
-    ghost.innerHTML = `
-      <div style="width:34px;height:34px;border-radius:6px;overflow:hidden;background:#f4f1ec;display:flex;align-items:center;justify-content:center;color:#1f7a7a;font-weight:700;">
-        ${ids.length}
-      </div>
-      <div>${ids.length === 1 ? item.title : `${ids.length} media selected`}</div>
-    `;
-    document.body.appendChild(ghost);
-    event.dataTransfer.setDragImage(ghost, 24, 24);
-    window.setTimeout(() => ghost.remove(), 0);
+    if (dragGhostCountRef.current) dragGhostCountRef.current.textContent = String(ids.length);
+    if (dragGhostLabelRef.current) {
+      dragGhostLabelRef.current.textContent =
+        ids.length === 1 ? item.title : `${ids.length} media selected`;
+    }
+    if (dragGhostRef.current) event.dataTransfer.setDragImage(dragGhostRef.current, 24, 24);
     window.setTimeout(() => setIsMediaDragging(true), 0);
   }
 
   function finishMediaDrag() {
     draggingMediaIdsRef.current = [];
-    dragOverTargetIdRef.current = null;
+    setDragOverTarget(null);
     setIsMediaDragging(false);
-    setDragOverTargetId(null);
   }
 
   function getDroppedMediaIds(event: DragEvent) {
@@ -549,8 +577,15 @@ export function MediaVoting({
 
   function setDragOverTarget(targetId: string | null) {
     if (dragOverTargetIdRef.current === targetId) return;
+    if (dragOverTargetIdRef.current) {
+      dropTargetRefs.current
+        .get(dragOverTargetIdRef.current)
+        ?.classList.remove("media-drop-target-active");
+    }
     dragOverTargetIdRef.current = targetId;
-    setDragOverTargetId(targetId);
+    if (targetId) {
+      dropTargetRefs.current.get(targetId)?.classList.add("media-drop-target-active");
+    }
   }
 
   function handleDragEnter(event: DragEvent, targetId: string) {
@@ -918,6 +953,13 @@ export function MediaVoting({
           return (
             <section
               key={session.id}
+              ref={(node) => {
+                if (node) {
+                  dropTargetRefs.current.set(session.id, node);
+                } else {
+                  dropTargetRefs.current.delete(session.id);
+                }
+              }}
               onClick={() => setActiveSessionId(session.id)}
               onDragEnter={(event) => handleDragEnter(event, session.id)}
               onDragOver={(event) => handleDragOver(event, session.id)}
@@ -927,7 +969,6 @@ export function MediaVoting({
                 "relative rounded-md border bg-white p-5 shadow-sm transition max-[1300px]:p-4",
                 // isActive ? "border-[#ef6f5e]" : "border-[#e6e0d8]",
                 isActive ? "border-[#e6e0d8]" : "border-[#e6e0d8]",
-                dragOverTargetId === session.id && "border-[#1f7a7a] bg-[#eef8f5] ring-2 ring-[#1f7a7a]/25",
               )}
             >
               <header className="flex flex-col gap-4 md:flex-row md:items-top md:justify-between">
@@ -1064,15 +1105,20 @@ export function MediaVoting({
 
         {(unsortedMedia.length > 0 || uploadTasks.length > 0) && (
           <aside
+            ref={(node) => {
+              if (node) {
+                dropTargetRefs.current.set("tray", node);
+              } else {
+                dropTargetRefs.current.delete("tray");
+              }
+            }}
             onDragEnter={(event) => handleDragEnter(event, "tray")}
             onDragOver={(event) => handleDragOver(event, "tray")}
             onDragLeave={(event) => handleDragLeave(event, "tray")}
             onDrop={dropIntoTray}
             className={cn(
               "flex h-[calc(100vh-2.5rem)] min-h-[420px] min-w-0 flex-col overflow-hidden rounded-md border bg-white/96 shadow-sm transition lg:h-[calc(100vh-4rem)] lg:sticky lg:top-8 max-[1300px]:min-h-[360px] max-[1300px]:lg:top-5",
-              dragOverTargetId === "tray"
-                ? "border-[#1f7a7a] ring-2 ring-[#1f7a7a]/25"
-                : "border-[#d8d0c6]",
+              "border-[#d8d0c6]",
             )}
           >
           <div className="flex items-center justify-between border-b border-[#e6e0d8] bg-[#fbfaf8] p-3">
