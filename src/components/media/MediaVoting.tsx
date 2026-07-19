@@ -1063,7 +1063,7 @@ export function MediaVoting({
                       selectionContainerRefs.current.delete(session.id);
                     }
                   }}
-                  className="relative mt-5 grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 max-[1300px]:mt-4 max-[1300px]:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
+                  className="relative mt-5 flex flex-wrap gap-2 max-[1300px]:mt-4 max-[1300px]:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
                   onPointerDown={(event) => beginSelectionBox(event, session.id, items)}
                   onPointerMove={moveSelectionBox}
                   onPointerUp={endSelectionBox}
