@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     const album = await AlbumModel.create({
       coupleId,
       title: `${folder.title}`,
-      description: "Created from folder votes.",
+      description: "Enter description...",
       coverMediaId: keepers[0],
       mediaIds: keepers,
       sourceVoteSessionId: folder._id,
