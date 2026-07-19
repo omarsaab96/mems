@@ -117,7 +117,6 @@ export default function Home() {
     ? mediaItems.filter((item) => latestAlbum.mediaIds.includes(item.id))
     : [];
   const comments = voteSessions.flatMap((session) => session.comments);
-  const votes = voteSessions.flatMap((session) => session.votes);
   const currentUser = users.find((user) => user.id === currentUserId) ?? null;
   const hasPartner = couple.partnerIds.filter(Boolean).length >= 2;
 
@@ -452,16 +451,6 @@ export default function Home() {
     setVoteSessions(result.folders);
   }
 
-  function getVoteCounts(mediaId: string) {
-    return votes.reduce(
-      (counts, item) => {
-        if (item.mediaId !== mediaId) return counts;
-        return { ...counts, [item.value]: counts[item.value] + 1 };
-      },
-      { keep: 0, delete: 0 },
-    );
-  }
-
   async function addComment(mediaId: string) {
     const body = commentDrafts[mediaId]?.trim();
     if (!body) return;
@@ -715,7 +704,6 @@ export default function Home() {
             setCommentDrafts={setCommentDrafts}
             vote={vote}
             addComment={addComment}
-            getVoteCounts={getVoteCounts}
             buildAlbumFromVotes={buildAlbumFromVotes}
             removeUploadedMedia={removeUploadedMedia}
             assignMediaToSessionBatch={assignMediaToSessionBatch}

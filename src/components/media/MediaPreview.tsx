@@ -15,8 +15,9 @@ export function MediaPreview({
       <video
         src={item.url}
         className={cn("h-full w-full", fit === "cover" ? "object-cover" : "object-contain", className)}
-        controls
+        controls={fit === "contain"}
         muted
+        preload={fit === "cover" ? "metadata" : "auto"}
       />
     );
   }

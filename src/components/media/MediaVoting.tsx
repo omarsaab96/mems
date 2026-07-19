@@ -56,6 +56,8 @@ type PreviewContext = {
 
 type AlbumValidationStatus = "keep" | "delete" | "conflict";
 
+const largeMediaRenderLimit = 96;
+
 export function MediaVoting({
   currentUserId,
   allMedia,
@@ -71,7 +73,6 @@ export function MediaVoting({
   setCommentDrafts,
   vote,
   addComment,
-  getVoteCounts,
   buildAlbumFromVotes,
   removeUploadedMedia,
   assignMediaToSessionBatch,
@@ -97,7 +98,6 @@ export function MediaVoting({
   setCommentDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   vote: (mediaId: string, value: VoteValue) => void;
   addComment: (mediaId: string) => void;
-  getVoteCounts: (mediaId: string) => { keep: number; delete: number };
   buildAlbumFromVotes: (sessionId?: string) => Promise<void>;
   removeUploadedMedia: (mediaId: string) => void;
   assignMediaToSessionBatch: (mediaIds: string[], sessionId: string) => void;
@@ -127,19 +127,45 @@ export function MediaVoting({
   const [albumValidationMessages, setAlbumValidationMessages] = useState<Record<string, string>>({});
   const [albumConfirmationTimers, setAlbumConfirmationTimers] = useState<Record<string, number>>({});
   const [confirmingAlbumSessionId, setConfirmingAlbumSessionId] = useState<string | null>(null);
+  const [visibleMediaLimits, setVisibleMediaLimits] = useState<Record<string, number>>({});
   const selectedMedia = allMedia.find((item) => item.id === selectedMediaId) ?? null;
   const confirmingAlbumSession =
     voteSessions.find((session) => session.id === confirmingAlbumSessionId) ?? null;
-  const selectedCounts = selectedMedia ? getVoteCounts(selectedMedia.id) : { keep: 0, delete: 0 };
-  const selectedComments = selectedMedia
-    ? comments.filter((comment) => comment.mediaId === selectedMedia.id)
-    : [];
   const mediaById = useMemo(
     () => new Map(allMedia.map((item) => [item.id, item])),
     [allMedia],
   );
+  const voteCountsByMediaId = useMemo(() => {
+    const counts = new Map<string, { keep: number; delete: number }>();
+
+    voteSessions.forEach((session) => {
+      session.votes.forEach((voteItem) => {
+        const current = counts.get(voteItem.mediaId) ?? { keep: 0, delete: 0 };
+        counts.set(voteItem.mediaId, {
+          ...current,
+          [voteItem.value]: current[voteItem.value] + 1,
+        });
+      });
+    });
+
+    return counts;
+  }, [voteSessions]);
+  const commentsByMediaId = useMemo(() => {
+    const grouped = new Map<string, MediaComment[]>();
+
+    comments.forEach((comment) => {
+      grouped.set(comment.mediaId, [...(grouped.get(comment.mediaId) ?? []), comment]);
+    });
+
+    return grouped;
+  }, [comments]);
+  const selectedCounts = selectedMedia
+    ? (voteCountsByMediaId.get(selectedMedia.id) ?? { keep: 0, delete: 0 })
+    : { keep: 0, delete: 0 };
+  const selectedComments = selectedMedia ? (commentsByMediaId.get(selectedMedia.id) ?? []) : [];
   const selectionContainerRefs = useRef(new Map<string, HTMLDivElement>());
   const mediaItemRefs = useRef(new Map<string, HTMLElement>());
+  const dragOverTargetIdRef = useRef<string | null>(null);
   const albumValidationMessageTimeoutRefs = useRef<Record<string, number>>({});
   const albumConfirmationTimeoutRefs = useRef<Record<string, number>>({});
   const selectionDragStartRef = useRef<{
@@ -154,6 +180,7 @@ export function MediaVoting({
   } | null>(null);
   const isBoxSelectingRef = useRef(false);
   const hasSelection = selectedMediaIds.size > 0;
+  const visibleTrayMedia = visibleMediaItems(unsortedMedia, "tray");
   const overallUploadProgress = uploadTasks.length
     ? Math.round(
         uploadTasks.reduce(
@@ -220,6 +247,29 @@ export function MediaVoting({
       const item = mediaById.get(mediaId);
       return item ? [item] : [];
     });
+  }
+
+  function visibleMediaItems(items: Media[], sourceId: string) {
+    const limit = visibleMediaLimits[sourceId] ?? largeMediaRenderLimit;
+    const selectedItems = items.filter((item) => selectedMediaIds.has(item.id));
+    const stampedItems =
+      sourceId === "tray"
+        ? []
+        : items.filter((item) => Boolean(albumValidationStamps[sourceId]?.[item.id]));
+    const indexById = new Map(items.map((item, index) => [item.id, index]));
+    const visible = items
+      .slice(0, limit)
+      .concat(selectedItems, stampedItems)
+      .filter((item, index, list) => list.findIndex((current) => current.id === item.id) === index);
+
+    return visible.sort((left, right) => (indexById.get(left.id) ?? 0) - (indexById.get(right.id) ?? 0));
+  }
+
+  function showMoreMedia(sourceId: string) {
+    setVisibleMediaLimits((limits) => ({
+      ...limits,
+      [sourceId]: (limits[sourceId] ?? largeMediaRenderLimit) + largeMediaRenderLimit,
+    }));
   }
 
   function openMediaPreview(mediaId: string, sourceId: string) {
@@ -463,6 +513,7 @@ export function MediaVoting({
   }
 
   function finishMediaDrag() {
+    dragOverTargetIdRef.current = null;
     setDraggingMediaIds([]);
     setDragOverTargetId(null);
   }
@@ -493,10 +544,27 @@ export function MediaVoting({
     finishMediaDrag();
   }
 
+  function setDragOverTarget(targetId: string | null) {
+    if (dragOverTargetIdRef.current === targetId) return;
+    dragOverTargetIdRef.current = targetId;
+    setDragOverTargetId(targetId);
+  }
+
+  function handleDragEnter(event: DragEvent, targetId: string) {
+    event.preventDefault();
+    setDragOverTarget(targetId);
+  }
+
   function handleDragOver(event: DragEvent, targetId: string) {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    setDragOverTargetId(targetId);
+    setDragOverTarget(targetId);
+  }
+
+  function handleDragLeave(event: DragEvent, targetId: string) {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+    if (dragOverTargetIdRef.current === targetId) setDragOverTarget(null);
   }
 
   function beginSelectionBox(
@@ -620,8 +688,8 @@ export function MediaVoting({
   }
 
   function renderMediaCard(item: Media, sourceId: string, sourceItems: Media[], index: number) {
-    const counts = getVoteCounts(item.id);
-    const itemComments = comments.filter((comment) => comment.mediaId === item.id);
+    const counts = voteCountsByMediaId.get(item.id) ?? { keep: 0, delete: 0 };
+    const itemComments = commentsByMediaId.get(item.id) ?? [];
     const totalVotes = counts.keep + counts.delete;
     const deletePercent = totalVotes === 0 ? 0 : (counts.delete / totalVotes) * 100;
     const keepPercent = totalVotes === 0 ? 0 : (counts.keep / totalVotes) * 100;
@@ -836,6 +904,7 @@ export function MediaVoting({
 
         {voteSessions.map((session) => {
           const items = sessionMedia(session);
+          const visibleItems = visibleMediaItems(items, session.id);
           const isActive = activeSessionId === session.id;
           const isValidatingAlbum = Boolean(validatingAlbumSessionIds[session.id]);
           const albumValidationMessage = albumValidationMessages[session.id];
@@ -845,8 +914,9 @@ export function MediaVoting({
             <section
               key={session.id}
               onClick={() => setActiveSessionId(session.id)}
+              onDragEnter={(event) => handleDragEnter(event, session.id)}
               onDragOver={(event) => handleDragOver(event, session.id)}
-              onDragLeave={() => setDragOverTargetId(null)}
+              onDragLeave={(event) => handleDragLeave(event, session.id)}
               onDrop={(event) => dropIntoSession(event, session.id)}
               className={cn(
                 "relative rounded-md border bg-white p-5 shadow-sm transition max-[1300px]:p-4",
@@ -953,7 +1023,9 @@ export function MediaVoting({
                   onPointerUp={endSelectionBox}
                   onPointerCancel={endSelectionBox}
                 >
-                  {items.map((item, index) => renderMediaCard(item, session.id, items, index))}
+                  {visibleItems.map((item) =>
+                    renderMediaCard(item, session.id, items, items.findIndex((media) => media.id === item.id)),
+                  )}
                   {selectionBox?.sourceId === session.id && (
                     <div
                       className="pointer-events-none absolute z-30 border border-[#1f7a7a] bg-[#1f7a7a]/14"
@@ -964,6 +1036,15 @@ export function MediaVoting({
                         height: selectionBox.height,
                       }}
                     />
+                  )}
+                  {visibleItems.length < items.length && (
+                    <button
+                      type="button"
+                      onClick={() => showMoreMedia(session.id)}
+                      className="col-span-full mt-2 inline-flex h-10 items-center justify-center rounded-md border border-[#d8d0c6] bg-white px-4 text-sm font-semibold text-[#202124] transition hover:bg-[#f4f1ec]"
+                    >
+                      Show {Math.min(largeMediaRenderLimit, items.length - visibleItems.length)} more
+                    </button>
                   )}
                 </div>
               ) : (
@@ -978,8 +1059,9 @@ export function MediaVoting({
 
         {(unsortedMedia.length > 0 || uploadTasks.length > 0) && (
           <aside
+            onDragEnter={(event) => handleDragEnter(event, "tray")}
             onDragOver={(event) => handleDragOver(event, "tray")}
-            onDragLeave={() => setDragOverTargetId(null)}
+            onDragLeave={(event) => handleDragLeave(event, "tray")}
             onDrop={dropIntoTray}
             className={cn(
               "flex h-[calc(100vh-2.5rem)] min-h-[420px] min-w-0 flex-col overflow-hidden rounded-md border bg-white/96 shadow-sm transition lg:h-[calc(100vh-4rem)] lg:sticky lg:top-8 max-[1300px]:min-h-[360px] max-[1300px]:lg:top-5",
@@ -1021,7 +1103,9 @@ export function MediaVoting({
               onPointerCancel={endSelectionBox}
             >
               {uploadTasks.map((task) => renderUploadTaskTile(task))}
-              {unsortedMedia.map((item, index) => renderMediaCard(item, "tray", unsortedMedia, index))}
+              {visibleTrayMedia.map((item) =>
+                renderMediaCard(item, "tray", unsortedMedia, unsortedMedia.findIndex((media) => media.id === item.id)),
+              )}
               {selectionBox?.sourceId === "tray" && (
                 <div
                   className="pointer-events-none absolute z-30 border border-[#1f7a7a] bg-[#1f7a7a]/14"
@@ -1032,6 +1116,15 @@ export function MediaVoting({
                     height: selectionBox.height,
                   }}
                 />
+              )}
+              {visibleTrayMedia.length < unsortedMedia.length && (
+                <button
+                  type="button"
+                  onClick={() => showMoreMedia("tray")}
+                  className="mt-2 inline-flex h-10 flex-[0_0_100%] items-center justify-center rounded-md border border-[#d8d0c6] bg-white px-4 text-sm font-semibold text-[#202124] transition hover:bg-[#f4f1ec]"
+                >
+                  Show {Math.min(largeMediaRenderLimit, unsortedMedia.length - visibleTrayMedia.length)} more
+                </button>
               )}
             </div>
           </div>
