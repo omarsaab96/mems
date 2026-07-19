@@ -496,7 +496,6 @@ export function MediaVoting({
 
     const ids = selectedMediaIds.has(item.id) ? Array.from(selectedMediaIds) : [item.id];
     draggingMediaIdsRef.current = ids;
-    setIsMediaDragging(true);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", ids.join(","));
 
@@ -512,6 +511,7 @@ export function MediaVoting({
     document.body.appendChild(ghost);
     event.dataTransfer.setDragImage(ghost, 24, 24);
     window.setTimeout(() => ghost.remove(), 0);
+    window.setTimeout(() => setIsMediaDragging(true), 0);
   }
 
   function finishMediaDrag() {
@@ -845,7 +845,7 @@ export function MediaVoting({
           "grid min-w-0 gap-5",
           (unsortedMedia.length > 0 || uploadTasks.length > 0) &&
             "lg:grid-cols-[minmax(0,1fr)_360px] max-[1300px]:lg:grid-cols-[minmax(0,1fr)_320px]",
-          isMediaDragging && "select-none [&_[data-media-card='true']]:pointer-events-none",
+          isMediaDragging && "select-none",
         )}
       >
         <section className="min-w-0 space-y-5">
