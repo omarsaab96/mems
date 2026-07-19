@@ -72,6 +72,8 @@ export async function POST(request: Request) {
           title: metadata.title,
           url: storedFile.url,
           storageKey: storedFile.storageKey,
+          thumbnailUrl: storedFile.thumbnailUrl,
+          thumbnailStorageKey: storedFile.thumbnailStorageKey,
           capturedAt: metadata.capturedAt || modifiedAt || new Date().toISOString(),
           location: metadata.location,
           status: "in_review",

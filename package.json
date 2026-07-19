@@ -6,15 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "media:backfill-thumbnails": "node scripts/backfill-media-thumbnails.mjs"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "lucide-react": "^1.24.0",
     "mongoose": "^9.7.4",
     "next": "16.2.10",
     "nodemailer": "^9.0.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

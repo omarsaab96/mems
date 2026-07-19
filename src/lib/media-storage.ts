@@ -1,6 +1,11 @@
 import { randomBytes } from "crypto";
+import { execFile } from "child_process";
 import { mkdir, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
+import { promisify } from "util";
+import sharp from "sharp";
+
+const execFileAsync = promisify(execFile);
 
 const mediaStorageRoot = process.env.MEDIA_STORAGE_DIR
   ? path.resolve(process.env.MEDIA_STORAGE_DIR)
@@ -74,18 +79,80 @@ async function readExistingFile(storageKey: string) {
 
 export async function saveUploadedMediaFile(file: File, coupleId: string) {
   const coupleSegment = safeSegment(coupleId);
-  const fileName = `${Date.now()}-${randomBytes(10).toString("hex")}${extensionFor(file)}`;
+  const fileBaseName = `${Date.now()}-${randomBytes(10).toString("hex")}`;
+  const fileName = `${fileBaseName}${extensionFor(file)}`;
   const storageKey = `${coupleSegment}/${fileName}`;
   const filePath = resolveStoragePath(storageKey);
   const buffer = Buffer.from(await file.arrayBuffer());
 
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, buffer);
+  const thumbnail = await createThumbnail({
+    buffer,
+    coupleSegment,
+    fileBaseName,
+    filePath,
+    mediaType: file.type.startsWith("video") ? "video" : "photo",
+  });
 
   return {
     storageKey,
+    thumbnailStorageKey: thumbnail?.storageKey,
+    thumbnailUrl: thumbnail?.url,
     url: `/api/media/files/${storageKey}`,
   };
+}
+
+async function createThumbnail({
+  buffer,
+  coupleSegment,
+  fileBaseName,
+  filePath,
+  mediaType,
+}: {
+  buffer: Buffer;
+  coupleSegment: string;
+  fileBaseName: string;
+  filePath: string;
+  mediaType: "photo" | "video";
+}) {
+  const thumbnailStorageKey = `${coupleSegment}/thumbnails/${fileBaseName}.jpg`;
+  const thumbnailPath = resolveStoragePath(thumbnailStorageKey);
+
+  try {
+    await mkdir(path.dirname(thumbnailPath), { recursive: true });
+
+    if (mediaType === "photo") {
+      await sharp(buffer)
+        .rotate()
+        .resize(420, 420, { fit: "cover", withoutEnlargement: true })
+        .jpeg({ quality: 72, mozjpeg: true })
+        .toFile(thumbnailPath);
+    } else {
+      await execFileAsync("ffmpeg", [
+        "-y",
+        "-ss",
+        "00:00:01",
+        "-i",
+        filePath,
+        "-frames:v",
+        "1",
+        "-vf",
+        "scale=420:-2",
+        "-q:v",
+        "4",
+        thumbnailPath,
+      ]);
+    }
+
+    return {
+      storageKey: thumbnailStorageKey,
+      url: `/api/media/files/${thumbnailStorageKey}`,
+    };
+  } catch {
+    await rm(thumbnailPath, { force: true }).catch(() => {});
+    return null;
+  }
 }
 
 export async function readStoredMediaFile(storageKey: string) {

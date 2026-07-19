@@ -68,6 +68,7 @@ export function serializeMedia(doc: DocumentRecord): Media {
     type: doc.type === "video" ? "video" : "photo",
     title: String(doc.title ?? ""),
     url: String(doc.url ?? ""),
+    thumbnailUrl: doc.thumbnailUrl ? String(doc.thumbnailUrl) : undefined,
     capturedAt: date(doc.capturedAt),
     location: String(doc.location ?? ""),
     memoryId: doc.memoryId ? id(doc.memoryId) : undefined,

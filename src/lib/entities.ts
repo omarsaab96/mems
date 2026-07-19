@@ -35,6 +35,7 @@ export type Media = {
   type: MediaType;
   title: string;
   url: string;
+  thumbnailUrl?: string;
   capturedAt: string;
   location: string;
   memoryId?: string;

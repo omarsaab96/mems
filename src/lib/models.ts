@@ -42,6 +42,7 @@ const mediaSchema = new Schema(
     url: { type: String, required: true },
     storageKey: String,
     thumbnailUrl: String,
+    thumbnailStorageKey: String,
     capturedAt: Date,
     location: String,
     memoryId: { type: Schema.Types.ObjectId, ref: "Memory" },

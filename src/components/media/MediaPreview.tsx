@@ -10,10 +10,23 @@ export function MediaPreview({
   className?: string;
   fit?: "cover" | "contain";
 }) {
+  const previewUrl = fit === "cover" ? (item.thumbnailUrl ?? item.url) : item.url;
+
   if (item.type === "video") {
+    if (fit === "cover" && item.thumbnailUrl) {
+      return (
+        <div
+          className={cn("h-full w-full bg-cover bg-center", className)}
+          style={{ backgroundImage: `url(${previewUrl})` }}
+          role="img"
+          aria-label={item.title}
+        />
+      );
+    }
+
     return (
       <video
-        src={item.url}
+        src={previewUrl}
         className={cn("h-full w-full", fit === "cover" ? "object-cover" : "object-contain", className)}
         controls={fit === "contain"}
         muted
@@ -25,11 +38,11 @@ export function MediaPreview({
   return (
     <div
       className={cn(
-        "h-full w-full bg-center",
-        fit === "cover" ? "bg-cover" : "bg-contain bg-no-repeat",
-        className,
-      )}
-      style={{ backgroundImage: `url(${item.url})` }}
+      "h-full w-full bg-center",
+      fit === "cover" ? "bg-cover" : "bg-contain bg-no-repeat",
+      className,
+    )}
+      style={{ backgroundImage: `url(${previewUrl})` }}
       role="img"
       aria-label={item.title}
     />

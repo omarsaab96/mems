@@ -15,7 +15,10 @@ export async function GET(
     const { key } = await params;
     const storageKey = key.join("/");
 
-    const media = await MediaModel.findOne({ coupleId, storageKey }).select("_id").lean();
+    const media = await MediaModel.findOne({
+      coupleId,
+      $or: [{ storageKey }, { thumbnailStorageKey: storageKey }],
+    }).select("_id").lean();
     if (!media) return Response.json({ error: "Media not found" }, { status: 404 });
 
     const file = await readStoredMediaFile(storageKey);

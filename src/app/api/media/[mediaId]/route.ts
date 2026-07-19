@@ -22,7 +22,10 @@ export async function DELETE(
       VoteSessionModel.updateMany({ coupleId }, { $pull: { mediaIds: mediaId, votes: { mediaId }, comments: { mediaId } } }),
       AlbumModel.updateMany({ coupleId }, { $pull: { mediaIds: mediaId } }),
     ]);
-    await deleteStoredMediaFile(mediaRecord.storageKey);
+    await Promise.all([
+      deleteStoredMediaFile(mediaRecord.storageKey),
+      deleteStoredMediaFile(mediaRecord.thumbnailStorageKey),
+    ]);
 
     return Response.json({ ok: true });
   } catch (error) {

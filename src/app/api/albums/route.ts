@@ -74,7 +74,9 @@ export async function POST(request: Request) {
       .filter((item) => item.decision === "delete")
       .map((item) => item.mediaId);
     const deletedMediaRecords = deletedMediaIds.length
-      ? await MediaModel.find({ _id: { $in: deletedMediaIds }, coupleId }).select("storageKey").lean()
+      ? await MediaModel.find({ _id: { $in: deletedMediaIds }, coupleId })
+          .select("storageKey thumbnailStorageKey")
+          .lean()
       : [];
     const comments = Array.isArray(folder.comments) ? folder.comments : [];
     const albumComments = comments
@@ -104,9 +106,13 @@ export async function POST(request: Request) {
         : Promise.resolve(),
     ]);
     await Promise.all(
-      deletedMediaRecords.map((media) =>
-        deleteStoredMediaFile((media as Record<string, unknown>).storageKey),
-      ),
+      deletedMediaRecords.flatMap((media) => {
+        const record = media as Record<string, unknown>;
+        return [
+          deleteStoredMediaFile(record.storageKey),
+          deleteStoredMediaFile(record.thumbnailStorageKey),
+        ];
+      }),
     );
 
     return Response.json({
