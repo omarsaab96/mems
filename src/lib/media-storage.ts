@@ -47,7 +47,7 @@ function extensionFor(file: File) {
   return extensionByMime[file.type] ?? (fromName || ".bin");
 }
 
-function resolveStoragePath(storageKey: string, options: { legacyDotless?: boolean } = {}) {
+export function resolveStoragePath(storageKey: string, options: { legacyDotless?: boolean } = {}) {
   const normalizedKey = storageKey
     .split("/")
     .map((segment) => options.legacyDotless ? safeSegment(segment) : safeStorageKeySegment(segment))
@@ -60,6 +60,21 @@ function resolveStoragePath(storageKey: string, options: { legacyDotless?: boole
   }
 
   return resolvedPath;
+}
+
+export async function getStoredMediaFilePath(storageKey: string) {
+  const filePath = resolveStoragePath(storageKey);
+
+  try {
+    await stat(filePath);
+    return filePath;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+
+    const legacyFilePath = resolveStoragePath(storageKey, { legacyDotless: true });
+    await stat(legacyFilePath);
+    return legacyFilePath;
+  }
 }
 
 async function readExistingFile(storageKey: string) {

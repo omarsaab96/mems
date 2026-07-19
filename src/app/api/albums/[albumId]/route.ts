@@ -13,19 +13,27 @@ export async function PATCH(
     await connectDb();
     const { userId, coupleId } = await requireAuthContext();
     const { albumId } = await params;
-    const body = (await request.json()) as { action?: string };
-
-    if (body.action !== "cancelDelete") {
-      return Response.json({ error: "Unsupported album action" }, { status: 400 });
-    }
+    const body = (await request.json()) as {
+      action?: string;
+      title?: string;
+      description?: string;
+    };
 
     const album = await AlbumModel.findOne({ _id: albumId, coupleId });
     if (!album) return Response.json({ error: "Album not found" }, { status: 404 });
 
-    album.deleteApprovalUserIds = (Array.isArray(album.deleteApprovalUserIds)
-      ? (album.deleteApprovalUserIds as unknown[])
-      : []
-    ).filter((approvalUserId) => String(approvalUserId) !== String(userId));
+    if (body.action === "cancelDelete") {
+      album.deleteApprovalUserIds = (Array.isArray(album.deleteApprovalUserIds)
+        ? (album.deleteApprovalUserIds as unknown[])
+        : []
+      ).filter((approvalUserId) => String(approvalUserId) !== String(userId));
+    } else {
+      const title = body.title?.trim();
+      if (!title) return Response.json({ error: "Album name is required" }, { status: 400 });
+
+      album.title = title;
+      album.description = body.description?.trim() ?? "";
+    }
     await album.save();
 
     return Response.json({ album: serializeAlbum(album.toObject()) });

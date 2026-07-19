@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, MessageCircle, Plus, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  MessageCircle,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import Image from "next/image";
 import { MediaMosaic } from "@/components/albums/MediaMosaic";
 import { MediaPreview } from "@/components/media/MediaPreview";
@@ -14,6 +25,7 @@ export function Albums({
   onDeleteAlbum,
   onCancelAlbumDeletion,
   onAddAlbumComment,
+  onUpdateAlbum,
   currentUserId,
   users,
 }: {
@@ -22,6 +34,7 @@ export function Albums({
   onDeleteAlbum: (albumId: string) => Promise<void>;
   onCancelAlbumDeletion: (albumId: string) => Promise<void>;
   onAddAlbumComment: (albumId: string, mediaId: string, body: string) => Promise<void>;
+  onUpdateAlbum: (albumId: string, values: { title: string; description: string }) => Promise<void>;
   currentUserId: string;
   users: User[];
 }) {
@@ -33,6 +46,11 @@ export function Albums({
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [busyAlbumId, setBusyAlbumId] = useState<string | null>(null);
   const [deleteErrorByAlbumId, setDeleteErrorByAlbumId] = useState<Record<string, string>>({});
+  const [selectedMediaByAlbumId, setSelectedMediaByAlbumId] = useState<Record<string, Set<string>>>({});
+  const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
+  const [albumTitleDraft, setAlbumTitleDraft] = useState("");
+  const [albumDescriptionDraft, setAlbumDescriptionDraft] = useState("");
+  const [albumEditError, setAlbumEditError] = useState("");
   const confirmingAlbum = albums.find((album) => album.id === confirmingAlbumId) ?? null;
   const currentUserApprovedDelete =
     confirmingAlbum?.deleteApprovalUserIds.includes(currentUserId) ?? false;
@@ -68,6 +86,57 @@ export function Albums({
 
   function albumMedia(album: Album) {
     return mediaItems.filter((item) => album.mediaIds.includes(item.id));
+  }
+
+  function selectedAlbumMediaIds(albumId: string) {
+    return selectedMediaByAlbumId[albumId] ?? new Set<string>();
+  }
+
+  function toggleAlbumMediaSelection(albumId: string, mediaId: string) {
+    setSelectedMediaByAlbumId((selectedByAlbum) => {
+      const next = new Set(selectedByAlbum[albumId] ?? []);
+      if (next.has(mediaId)) {
+        next.delete(mediaId);
+      } else {
+        next.add(mediaId);
+      }
+      return { ...selectedByAlbum, [albumId]: next };
+    });
+  }
+
+  function setAlbumMediaSelection(albumId: string, mediaIds: string[]) {
+    setSelectedMediaByAlbumId((selectedByAlbum) => ({
+      ...selectedByAlbum,
+      [albumId]: new Set(mediaIds),
+    }));
+  }
+
+  function downloadAlbum(album: Album, mediaIds?: string[]) {
+    const query = mediaIds?.length ? `?mediaIds=${encodeURIComponent(mediaIds.join(","))}` : "";
+    window.location.href = `/api/albums/${album.id}/download${query}`;
+  }
+
+  function startAlbumEdit(album: Album) {
+    setEditingAlbumId(album.id);
+    setAlbumTitleDraft(album.title);
+    setAlbumDescriptionDraft(album.description);
+    setAlbumEditError("");
+  }
+
+  async function saveAlbumEdit(album: Album) {
+    try {
+      setBusyAlbumId(album.id);
+      setAlbumEditError("");
+      await onUpdateAlbum(album.id, {
+        title: albumTitleDraft,
+        description: albumDescriptionDraft,
+      });
+      setEditingAlbumId(null);
+    } catch (error) {
+      setAlbumEditError(error instanceof Error ? error.message : "Failed to update album");
+    } finally {
+      setBusyAlbumId(null);
+    }
   }
 
   function setAlbumError(albumId: string, message: string) {
@@ -170,6 +239,10 @@ export function Albums({
     <>
       <div className="space-y-5">
         {albums.map((album) => {
+          const items = albumMedia(album);
+          const selectedMediaIds = selectedAlbumMediaIds(album.id);
+          const selectedCount = selectedMediaIds.size;
+          const isEditing = editingAlbumId === album.id;
           const isPendingDeletion = album.deleteApprovalUserIds.length > 0;
           const hasCurrentUserApproved = album.deleteApprovalUserIds.includes(currentUserId);
           const deleteError = deleteErrorByAlbumId[album.id];
@@ -181,14 +254,69 @@ export function Albums({
               className="rounded-md border border-[#e6e0d8] bg-white p-5 shadow-sm max-[1300px]:p-4"
             >
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h3 className="text-2xl font-semibold tracking-normal max-[1300px]:text-xl">{album.title}</h3>
-                  <p className=" max-w-2xl text-sm leading-6 text-[#6b7177]">
-                    {/* {album.description} */}
-                    Description goes here...
-                  </p>
+                <div className="min-w-0 flex-1">
+                  {isEditing ? (
+                    <div className="max-w-2xl space-y-2">
+                      <input
+                        value={albumTitleDraft}
+                        onChange={(event) => setAlbumTitleDraft(event.target.value)}
+                        className="w-full rounded-md border border-[#d8d0c6] px-3 py-2 text-xl font-semibold outline-none focus:border-[#1f7a7a]"
+                        aria-label="Album name"
+                      />
+                      <textarea
+                        value={albumDescriptionDraft}
+                        onChange={(event) => setAlbumDescriptionDraft(event.target.value)}
+                        rows={2}
+                        className="w-full resize-none rounded-md border border-[#d8d0c6] px-3 py-2 text-sm leading-6 outline-none focus:border-[#1f7a7a]"
+                        aria-label="Album description"
+                        placeholder="Album description"
+                      />
+                      {albumEditError && (
+                        <p className="rounded-md border border-[#f1c7be] bg-[#fff1ec] p-3 text-sm font-semibold text-[#9a3f34]">
+                          {albumEditError}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-2xl font-semibold tracking-normal max-[1300px]:text-xl">{album.title}</h3>
+                        <button
+                          type="button"
+                          title="Edit album"
+                          onClick={() => startAlbumEdit(album)}
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-[#5f666d] transition hover:bg-[#f4f1ec] hover:text-[#202124]"
+                        >
+                          <Pencil size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                      <p className="max-w-2xl text-sm leading-6 text-[#6b7177]">
+                        {album.description || "No description yet."}
+                      </p>
+                    </>
+                  )}
                 </div>
-                {isPendingDeletion && hasCurrentUserApproved ? (
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingAlbumId(null)}
+                      disabled={isBusy}
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-[#d8d0c6] px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveAlbumEdit(album)}
+                      disabled={isBusy}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#1f7a7a] px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Check size={16} aria-hidden="true" />
+                      {isBusy ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                ) : isPendingDeletion && hasCurrentUserApproved ? (
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center justify-center text-xs text-[#6b7177]">
                       Pending approval from partner
@@ -224,18 +352,57 @@ export function Albums({
                         <span>Delete album</span>
                       )}
                     </button>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => downloadAlbum(album)}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#d8d0c6] px-3 text-xs font-semibold"
+                      >
+                        <Download size={16} aria-hidden="true" />
+                        Download album
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadAlbum(album, Array.from(selectedMediaIds))}
+                        disabled={!selectedCount}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#d8d0c6] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Download size={16} aria-hidden="true" />
+                        Download selected {selectedCount ? `(${selectedCount})` : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAlbumMediaSelection(album.id, items.map((item) => item.id))}
+                        disabled={!items.length || selectedCount === items.length}
+                        className="inline-flex h-10 items-center justify-center rounded-md border border-[#d8d0c6] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAlbumMediaSelection(album.id, [])}
+                        disabled={!selectedCount}
+                        className="inline-flex h-10 items-center justify-center rounded-md border border-[#d8d0c6] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
 
                 )}
               </div>
+
               {deleteError && confirmingAlbumId !== album.id && (
                 <p className="mt-4 rounded-md border border-[#f1c7be] bg-[#fff1ec] p-3 text-sm font-semibold text-[#9a3f34]">
                   {deleteError}
                 </p>
               )}
               <MediaMosaic
-                mediaItems={albumMedia(album)}
+                mediaItems={items}
                 onOpenMedia={(mediaId) => openPreview(album.id, mediaId)}
+                selectedMediaIds={selectedMediaIds}
+                onToggleMedia={(mediaId) => toggleAlbumMediaSelection(album.id, mediaId)}
               />
             </section>
           );

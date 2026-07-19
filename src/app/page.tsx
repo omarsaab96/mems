@@ -560,6 +560,17 @@ export default function Home() {
     setAlbums((items) => items.map((item) => (item.id === result.album.id ? result.album : item)));
   }
 
+  async function updateAlbum(albumId: string, values: { title: string; description: string }) {
+    const result = await withApiLoader(() =>
+      requestJson<{ album: Album }>(`/api/albums/${albumId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      }),
+    );
+    setAlbums((items) => items.map((item) => (item.id === result.album.id ? result.album : item)));
+  }
+
   async function createVoteSession(title: string) {
     const result = await withApiLoader(() =>
       requestJson<{ folder: VoteSession }>("/api/folders", {
@@ -801,6 +812,7 @@ export default function Home() {
           onDeleteAlbum={deleteAlbum}
           onCancelAlbumDeletion={cancelAlbumDeletion}
           onAddAlbumComment={addAlbumComment}
+          onUpdateAlbum={updateAlbum}
           currentUserId={currentUserId}
           users={users}
         />
