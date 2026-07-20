@@ -643,7 +643,12 @@ export default function Home() {
     }
     if (result.media?.length) {
       const mediaById = new Map(result.media.map((item) => [item.id, item]));
-      setMediaItems((items) => items.map((item) => mediaById.get(item.id) ?? item));
+      setMediaItems((items) => {
+        const existingIds = new Set(items.map((item) => item.id));
+        const updatedItems = items.map((item) => mediaById.get(item.id) ?? item);
+        const newItems = result.media?.filter((item) => !existingIds.has(item.id)) ?? [];
+        return [...newItems, ...updatedItems];
+      });
     }
     if (result.deletedMediaIds?.length) {
       const deletedIds = new Set(result.deletedMediaIds);

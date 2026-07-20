@@ -672,7 +672,12 @@ export function Albums({
                 selectedMediaIds={selectedMediaIds}
                 onToggleMedia={(mediaId) => toggleAlbumMediaSelection(album.id, mediaId)}
               />
-              {/* {availableForAlbum.length > 0 && (
+              {!items.length && (
+                <div className="mt-5 rounded-md border border-dashed border-[#d8d0c6] bg-[#fbfaf8] p-6 text-center text-sm font-medium text-[#6b7177]">
+                  No approved media in this album yet.
+                </div>
+              )}
+              {availableForAlbum.length > 0 && (
                 <div className="mt-5 border-t border-[#e6e0d8] pt-5">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -697,7 +702,7 @@ export function Albums({
                     onToggleMedia={(mediaId) => toggleAddMediaSelection(album.id, mediaId)}
                   />
                 </div>
-              )} */}
+              )}
             </section>
           );
         })}
