@@ -672,7 +672,7 @@ export function Albums({
                 selectedMediaIds={selectedMediaIds}
                 onToggleMedia={(mediaId) => toggleAlbumMediaSelection(album.id, mediaId)}
               />
-              {availableForAlbum.length > 0 && (
+              {/* {availableForAlbum.length > 0 && (
                 <div className="mt-5 border-t border-[#e6e0d8] pt-5">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -697,7 +697,7 @@ export function Albums({
                     onToggleMedia={(mediaId) => toggleAddMediaSelection(album.id, mediaId)}
                   />
                 </div>
-              )}
+              )} */}
             </section>
           );
         })}
