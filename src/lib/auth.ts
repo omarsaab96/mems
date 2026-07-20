@@ -7,6 +7,7 @@ import type { Types } from "mongoose";
 import { connectDb } from "@/lib/db";
 import {
   AlbumModel,
+  AlbumChangeRequestModel,
   CoupleModel,
   MediaModel,
   MemoryModel,
@@ -49,6 +50,7 @@ export async function findActiveCoupleForUser(userId: Types.ObjectId) {
       MediaModel.updateMany({ coupleId: { $in: staleCoupleIds } }, { $set: { coupleId: couple._id } }),
       VoteSessionModel.updateMany({ coupleId: { $in: staleCoupleIds } }, { $set: { coupleId: couple._id } }),
       AlbumModel.updateMany({ coupleId: { $in: staleCoupleIds } }, { $set: { coupleId: couple._id } }),
+      AlbumChangeRequestModel.updateMany({ coupleId: { $in: staleCoupleIds } }, { $set: { coupleId: couple._id } }),
       MemoryModel.updateMany({ coupleId: { $in: staleCoupleIds } }, { $set: { coupleId: couple._id } }),
       TimelineItemModel.updateMany({ coupleId: { $in: staleCoupleIds } }, { $set: { coupleId: couple._id } }),
       CoupleModel.deleteMany({ _id: { $in: staleCoupleIds } }),

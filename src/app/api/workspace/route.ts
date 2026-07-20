@@ -2,6 +2,7 @@ import { findActiveCoupleForUser, requireUserContext, unauthorizedResponse } fro
 import { connectDb } from "@/lib/db";
 import {
   serializeAlbum,
+  serializeAlbumChangeRequest,
   serializeCouple,
   serializeMedia,
   serializeMemory,
@@ -9,7 +10,7 @@ import {
   serializeUser,
   serializeVoteSession,
 } from "@/lib/api-serializers";
-import { AlbumModel, MediaModel, MemoryModel, TimelineItemModel, UserModel, VoteSessionModel } from "@/lib/models";
+import { AlbumChangeRequestModel, AlbumModel, MediaModel, MemoryModel, TimelineItemModel, UserModel, VoteSessionModel } from "@/lib/models";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,7 @@ export async function GET() {
         media: [],
         voteSessions: [],
         albums: [],
+        albumChangeRequests: [],
         memories: [],
         timeline: [],
       });
@@ -38,11 +40,12 @@ export async function GET() {
 
     const coupleId = couple._id;
 
-    const [users, media, voteSessions, albums, memories, timeline] = await Promise.all([
+    const [users, media, voteSessions, albums, albumChangeRequests, memories, timeline] = await Promise.all([
       UserModel.find().sort({ createdAt: 1 }).lean(),
       MediaModel.find({ coupleId }).sort({ createdAt: -1 }).lean(),
       VoteSessionModel.find({ coupleId }).sort({ createdAt: -1 }).lean(),
       AlbumModel.find({ coupleId }).sort({ createdAt: -1 }).lean(),
+      AlbumChangeRequestModel.find({ coupleId }).sort({ createdAt: -1 }).lean(),
       MemoryModel.find({ coupleId }).sort({ date: -1 }).lean(),
       TimelineItemModel.find({ coupleId }).sort({ date: -1 }).lean(),
     ]);
@@ -54,6 +57,7 @@ export async function GET() {
       media: media.map(serializeMedia),
       voteSessions: voteSessions.map(serializeVoteSession),
       albums: albums.map(serializeAlbum),
+      albumChangeRequests: albumChangeRequests.map(serializeAlbumChangeRequest),
       memories: memories.map(serializeMemory),
       timeline: timeline.map(serializeTimelineItem),
     });

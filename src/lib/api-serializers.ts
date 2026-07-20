@@ -1,6 +1,11 @@
 import type { Types } from "mongoose";
 import type {
   Album,
+  AlbumChangeRequest,
+  AlbumChangeRequestStatus,
+  AlbumChangeRequestType,
+  AlbumChangeVote,
+  AlbumChangeVoteValue,
   Couple,
   Media,
   MediaComment,
@@ -137,6 +142,36 @@ export function serializeAlbum(doc: DocumentRecord): Album {
         createdAt: date(record.createdAt),
       };
     }),
+  };
+}
+
+export function serializeAlbumChangeRequest(doc: DocumentRecord): AlbumChangeRequest {
+  const votes = Array.isArray(doc.votes) ? doc.votes : [];
+
+  return {
+    id: id(doc._id),
+    coupleId: id(doc.coupleId),
+    albumId: id(doc.albumId),
+    type: (doc.type === "remove" ? "remove" : "add") as AlbumChangeRequestType,
+    mediaIds: Array.isArray(doc.mediaIds) ? doc.mediaIds.map(id) : [],
+    proposedByUserId: id(doc.proposedByUserId),
+    discardMediaOnReject: Boolean(doc.discardMediaOnReject),
+    status: (
+      doc.status === "approved" ||
+      doc.status === "rejected" ||
+      doc.status === "cancelled"
+        ? doc.status
+        : "pending"
+    ) as AlbumChangeRequestStatus,
+    votes: votes.map((vote): AlbumChangeVote => {
+      const record = vote as Record<string, unknown>;
+      return {
+        voterUserId: id(record.voterUserId),
+        value: (record.value === "reject" ? "reject" : "approve") as AlbumChangeVoteValue,
+      };
+    }),
+    createdAt: date(doc.createdAt),
+    resolvedAt: date(doc.resolvedAt),
   };
 }
 

@@ -91,6 +91,29 @@ export type Album = {
   comments: MediaComment[];
 };
 
+export type AlbumChangeRequestType = "add" | "remove";
+export type AlbumChangeRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type AlbumChangeVoteValue = "approve" | "reject";
+
+export type AlbumChangeVote = {
+  voterUserId: string;
+  value: AlbumChangeVoteValue;
+};
+
+export type AlbumChangeRequest = {
+  id: string;
+  coupleId: string;
+  albumId: string;
+  type: AlbumChangeRequestType;
+  mediaIds: string[];
+  proposedByUserId: string;
+  status: AlbumChangeRequestStatus;
+  discardMediaOnReject: boolean;
+  votes: AlbumChangeVote[];
+  createdAt: string;
+  resolvedAt: string;
+};
+
 export type TimelineItemType = "text" | "photo" | "video" | "memory" | "album";
 
 export type TimelineItem = {

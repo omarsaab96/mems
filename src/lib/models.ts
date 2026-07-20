@@ -102,6 +102,31 @@ const albumSchema = new Schema(
   timestamps,
 );
 
+const albumChangeRequestSchema = new Schema(
+  {
+    coupleId: { type: Schema.Types.ObjectId, ref: "Couple", required: true, index: true },
+    albumId: { type: Schema.Types.ObjectId, ref: "Album", required: true, index: true },
+    type: { type: String, enum: ["add", "remove"], required: true },
+    mediaIds: [{ type: Schema.Types.ObjectId, ref: "Media", required: true }],
+    proposedByUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    discardMediaOnReject: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "cancelled"],
+      default: "pending",
+      index: true,
+    },
+    votes: [
+      {
+        voterUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        value: { type: String, enum: ["approve", "reject"], required: true },
+      },
+    ],
+    resolvedAt: Date,
+  },
+  timestamps,
+);
+
 const timelineItemSchema = new Schema(
   {
     coupleId: { type: Schema.Types.ObjectId, ref: "Couple", required: true },
@@ -168,6 +193,7 @@ export const MemoryModel = modelWithSchema("Memory", memorySchema);
 export const MediaModel = modelWithSchema("Media", mediaSchema);
 export const VoteSessionModel = modelWithSchema("VoteSession", voteSessionSchema);
 export const AlbumModel = modelWithSchema("Album", albumSchema);
+export const AlbumChangeRequestModel = modelWithSchema("AlbumChangeRequest", albumChangeRequestSchema);
 export const TimelineItemModel = modelWithSchema("TimelineItem", timelineItemSchema);
 export const SessionModel = modelWithSchema("Session", sessionSchema, [
   "tokenHash",

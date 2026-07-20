@@ -13,6 +13,8 @@ import { Timeline } from "@/components/timeline/Timeline";
 import type { AppSection, AuthMode } from "@/lib/app-types";
 import type {
   Album,
+  AlbumChangeRequest,
+  AlbumChangeRequestType,
   Couple,
   Media,
   Memory,
@@ -30,6 +32,7 @@ type WorkspaceData = {
   media: Media[];
   voteSessions: VoteSession[];
   albums: Album[];
+  albumChangeRequests: AlbumChangeRequest[];
   memories: Memory[];
   timeline: TimelineItem[];
 };
@@ -82,6 +85,7 @@ export default function Home() {
   const [voteSessions, setVoteSessions] = useState<VoteSession[]>([]);
   const [activeVoteSessionId, setActiveVoteSessionId] = useState("");
   const [albums, setAlbums] = useState<Album[]>([]);
+  const [albumChangeRequests, setAlbumChangeRequests] = useState<AlbumChangeRequest[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -98,7 +102,7 @@ export default function Home() {
   const [onboardingError, setOnboardingError] = useState("");
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const [isMediaUploadDragActive, setIsMediaUploadDragActive] = useState(false);
-  const handleUploadRef = useRef<(files: FileList | File[] | null) => Promise<void>>(async () => {});
+  const handleUploadRef = useRef<(files: FileList | File[] | null) => Promise<Media[]>>(async () => []);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [pendingApiCount, setPendingApiCount] = useState(0);
   const [workspaceError, setWorkspaceError] = useState("");
@@ -111,8 +115,16 @@ export default function Home() {
   const sessionMediaIds = new Set(voteSessions.flatMap((session) => session.mediaIds));
   const latestAlbum = albums[0] ?? null;
   const albumMediaIds = new Set(albums.flatMap((album) => album.mediaIds));
+  const pendingAlbumAddMediaIds = new Set(
+    albumChangeRequests
+      .filter((request) => request.status === "pending" && request.type === "add")
+      .flatMap((request) => request.mediaIds),
+  );
   const unsortedMedia = mediaItems.filter(
-    (item) => !sessionMediaIds.has(item.id) && !albumMediaIds.has(item.id),
+    (item) =>
+      !sessionMediaIds.has(item.id) &&
+      !albumMediaIds.has(item.id) &&
+      !pendingAlbumAddMediaIds.has(item.id),
   );
   const albumMedia = latestAlbum
     ? mediaItems.filter((item) => latestAlbum.mediaIds.includes(item.id))
@@ -166,6 +178,7 @@ export default function Home() {
           : workspace.voteSessions[0]?.id ?? "",
       );
       setAlbums(workspace.albums);
+      setAlbumChangeRequests(workspace.albumChangeRequests);
       setMemories(workspace.memories);
       setTimeline(workspace.timeline);
     } catch (error) {
@@ -241,6 +254,7 @@ export default function Home() {
     setMediaItems([]);
     setVoteSessions([]);
     setAlbums([]);
+    setAlbumChangeRequests([]);
     setMemories([]);
     setTimeline([]);
     setPartnerEmail("");
@@ -340,8 +354,11 @@ export default function Home() {
     });
   }
 
-  async function handleUpload(files: FileList | File[] | null) {
-    if (!files?.length) return;
+  async function handleUpload(
+    files: FileList | File[] | null,
+    activeSectionAfterUpload: AppSection = "media",
+  ): Promise<Media[]> {
+    if (!files?.length) return [];
     const fileList = Array.from(files);
     const uploadItems = fileList.map((file) => ({
       id: `${file.name}-${file.lastModified}-${file.size}-${crypto.randomUUID()}`,
@@ -362,7 +379,7 @@ export default function Home() {
         })),
         ...tasks,
       ]);
-      setActiveSection("media");
+      setActiveSection(activeSectionAfterUpload);
 
       const result = await withApiLoader(() => uploadFilesWithProgress(uploadItems));
 
@@ -379,6 +396,7 @@ export default function Home() {
         return tasks.filter((task) => !taskIds.has(task.id));
       });
       setMediaItems((items) => [...result.media, ...items]);
+      return result.media;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload media";
       setWorkspaceError(message);
@@ -387,6 +405,7 @@ export default function Home() {
           taskIds.has(task.id) ? { ...task, status: "error", error: message } : task,
         ),
       );
+      return [];
     }
   }
 
@@ -507,6 +526,9 @@ export default function Home() {
     const removedFolderId = result.folderId || sessionId;
 
     setAlbums((items) => [result.album, ...items.filter((item) => item.id !== result.album.id)]);
+    setAlbumChangeRequests((requests) =>
+      requests.filter((request) => request.albumId !== result.album.id),
+    );
     setVoteSessions((sessions) => {
       const nextSessions = sessions.filter((session) => session.id !== removedFolderId);
       if (activeVoteSessionId === removedFolderId) {
@@ -531,6 +553,7 @@ export default function Home() {
     );
     if (result.deleted) {
       setAlbums((items) => items.filter((item) => item.id !== albumId));
+      setAlbumChangeRequests((requests) => requests.filter((request) => request.albumId !== albumId));
       return;
     }
     if (result.album) {
@@ -569,6 +592,63 @@ export default function Home() {
       }),
     );
     setAlbums((items) => items.map((item) => (item.id === result.album.id ? result.album : item)));
+  }
+
+  async function proposeAlbumChange(
+    albumId: string,
+    type: AlbumChangeRequestType,
+    mediaIds: string[],
+    options: { discardMediaOnReject?: boolean } = {},
+  ) {
+    const result = await withApiLoader(() =>
+      requestJson<{ changeRequest: AlbumChangeRequest }>(`/api/albums/${albumId}/changes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, mediaIds, discardMediaOnReject: options.discardMediaOnReject }),
+      }),
+    );
+    setAlbumChangeRequests((requests) => [
+      result.changeRequest,
+      ...requests.filter((request) => request.id !== result.changeRequest.id),
+    ]);
+  }
+
+  async function voteAlbumChange(
+    albumId: string,
+    requestId: string,
+    action: "approve" | "reject" | "cancel",
+  ) {
+    const result = await withApiLoader(() =>
+      requestJson<{
+        album?: Album;
+        media?: Media[];
+        deletedMediaIds?: string[];
+        changeRequest: AlbumChangeRequest;
+      }>(
+        `/api/albums/${albumId}/changes/${requestId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        },
+      ),
+    );
+    setAlbumChangeRequests((requests) =>
+      requests.map((request) =>
+        request.id === result.changeRequest.id ? result.changeRequest : request,
+      ),
+    );
+    if (result.album) {
+      setAlbums((items) => items.map((item) => (item.id === result.album?.id ? result.album : item)));
+    }
+    if (result.media?.length) {
+      const mediaById = new Map(result.media.map((item) => [item.id, item]));
+      setMediaItems((items) => items.map((item) => mediaById.get(item.id) ?? item));
+    }
+    if (result.deletedMediaIds?.length) {
+      const deletedIds = new Set(result.deletedMediaIds);
+      setMediaItems((items) => items.filter((item) => !deletedIds.has(item.id)));
+    }
   }
 
   async function createVoteSession(title: string) {
@@ -813,6 +893,11 @@ export default function Home() {
           onCancelAlbumDeletion={cancelAlbumDeletion}
           onAddAlbumComment={addAlbumComment}
           onUpdateAlbum={updateAlbum}
+          onProposeAlbumChange={proposeAlbumChange}
+          onVoteAlbumChange={voteAlbumChange}
+          onUploadAlbumMedia={(files) => handleUpload(files, "albums")}
+          albumChangeRequests={albumChangeRequests}
+          availableMediaItems={unsortedMedia}
           currentUserId={currentUserId}
           users={users}
         />
