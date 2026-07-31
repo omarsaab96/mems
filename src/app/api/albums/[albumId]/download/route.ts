@@ -27,7 +27,19 @@ function safeDownloadName(value: string) {
 
 function contentDisposition(value: string) {
   const safeName = safeDownloadName(value);
-  return `attachment; filename="${safeName.replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(safeName)}`;
+  let asciiFallback = safeDownloadName(
+    safeName
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/["%\\;]/g, " "),
+  );
+  if (asciiFallback.startsWith(".")) asciiFallback = `download${asciiFallback}`;
+  const encodedName = encodeURIComponent(safeName).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`;
 }
 
 function mediaFileName(media: MediaRecord, index: number) {
